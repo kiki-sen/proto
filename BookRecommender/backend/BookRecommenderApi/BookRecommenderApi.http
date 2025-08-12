@@ -1,0 +1,10 @@
+@BookRecommenderApi_HostAddress = http://localhost:8080
+
+POST {{BookRecommenderApi_HostAddress}}/greeting
+Content-Type: application/json
+{
+  "name": "Alice"
+}
+
+
+###
