@@ -1,0 +1,97 @@
+<main class="main">
+
+  <!-- User Section -->
+  <section>
+    <h2>Users</h2>
+    <input [(ngModel)]="newUserName" placeholder="Enter user name" />
+    <button (click)="createUser()">Add User</button>
+
+    <ul>
+      @for (user of users; track user.id) {
+        <li>{{ user.name }}</li>
+      }
+    </ul>
+  </section>
+
+  <!-- Book Section -->
+  <section>
+    <h2>Books</h2>
+    <input [(ngModel)]="newBookTitle" placeholder="Book title" />
+    <input [(ngModel)]="newBookAuthor" placeholder="Book author" />
+    <button (click)="createBook()">Add Book</button>
+
+    <ul>
+      @for (book of books; track book.id) {
+        <li>{{ book.title }} by {{ book.author }}</li>
+      }
+    </ul>
+  </section>
+
+  <!-- Recommendations Section -->
+  <section>
+    <h2>Recommendations</h2>
+
+    <label>User:</label>
+    <select [(ngModel)]="selectedUserId">
+      <option [ngValue]="null">-- choose user --</option>
+      @for (u of users; track u.id) {
+        <option [ngValue]="u.id">{{ u.name }}</option>
+      }
+    </select>
+
+    <button (click)="getRecommendations()" [disabled]="selectedUserId == null">
+      Get Recommendations
+    </button>
+
+    @if (recommendations.length === 0) {
+      <p class="muted">No recommendations yet.</p>
+    } @else {
+      <ul>
+        @for (r of recommendations; track r.id) {
+          <li><strong>{{ r.title }}</strong> — {{ r.author }}<div class="reason">{{ r.reason }}</div></li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- Read a book -->
+  <section>
+    <h2>Mark a book as read</h2>
+
+    <label>User:</label>
+    <select [(ngModel)]="selectedUserId">
+      <option [ngValue]="null">-- choose user --</option>
+      @for (u of users; track u.id) {
+        <option [ngValue]="u.id">{{ u.name }}</option>
+      }
+    </select>
+
+    <label>Book:</label>
+    <select [(ngModel)]="selectedBookId">
+      <option [ngValue]="null">-- choose book --</option>
+      @for (b of books; track b.id) {
+        <option [ngValue]="b.id">{{ b.title }} — {{ b.author }}</option>
+      }
+    </select>
+
+    <button (click)="markAsRead()">Add to reading history</button>
+  </section>
+
+  <!-- Reading history for selected user -->
+  <section>
+    <h3>Reading history</h3>
+    @if (selectedUserId === null) {
+      <p>Select a user to view reading history.</p>
+    } @else {
+      <button (click)="loadReadingHistory()">Refresh</button>
+      <ul>
+        @for (b of readingHistory; track b.id) {
+          <li>{{ b.title }} — {{ b.author }}</li>
+        }
+      </ul>
+    }
+  </section>  
+
+</main>
+
+<router-outlet />
