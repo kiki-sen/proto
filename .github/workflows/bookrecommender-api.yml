@@ -25,14 +25,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Step 1 — Decode AZURE_CREDENTIALS_B64 to creds.json
+      - name: Decode Azure credentials
+        run: echo "${{ secrets.AZURE_CREDENTIALS_B64 }}" | base64 --decode > $HOME/creds.json
+
+      # Step 2 — Read creds.json into an output variable
+      - name: Read Azure credentials JSON
+        id: read_creds
+        run: |
+          CREDS_JSON=$(cat $HOME/creds.json)
+          echo "json=$CREDS_JSON" >> $GITHUB_OUTPUT
+
       - name: Debug AZURE_CREDENTIALS
         run: |
-          echo "${{ secrets.AZURE_CREDENTIALS }}" | head -n 1
+          echo "${{ steps.read_creds.outputs.json }}"
 
+      # Step 3 — Login to Azure using the decoded JSON
       - name: Azure login
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          creds: ${{ steps.read_creds.outputs.json }}      
 
       - name: ACR login
         run: az acr login --name $ACR_NAME
