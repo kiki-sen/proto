@@ -2,35 +2,6 @@
 <#
 .SYNOPSIS
   Idempotent setup for Azure resources used by the Book Recommender project.
-
-.PROVISIONS
-  - Resource Group
-  - Azure Container Registry (ACR)
-  - PostgreSQL Flexible Server (+ DB + firewall rule for Azure services)
-  - App Service Plan (Linux) + Web App for Containers (API)
-  - Managed Identity on Web App + AcrPull role on ACR
-  - App Settings (ASPNETCORE_*) and Connection String (DefaultConnection)
-  - (Optional) Azure Static Web App for Angular UI
-
-.PREREQS
-  az login
-  az account set --subscription "<SUB_ID_OR_NAME>"
-
-.EXAMPLE
-  pwsh ./infra/setup-azure.ps1 `
-    -Subscription "YOUR-SUB-ID" `
-    -Location "westeurope" `
-    -ResourceGroup "bookrec-rg" `
-    -AcrName "bookrecacr1234" `
-    -WebAppName "bookrec-api" `
-    -PgServerName "bookrecpg1234" `
-    -PgAdminUser "bookuser" `
-    -PgAdminPassword "SuperS3cure!123" `
-    -PgDatabase "bookdb" `
-    -Tier "Burstable" `
-    -SkuName "Standard_B1ms" `
-    -CreateStaticWebApp:$true `
-    -StaticWebAppName "bookrec-ui"
 #>
 
 param(
@@ -58,34 +29,78 @@ param(
   [string] $StaticWebAppName = ""
 )
 
-# Prevent native stderr from becoming terminating errors
+# Avoid native stderr becoming terminating errors in WinPS5
 $PSNativeCommandUseErrorActionPreference = $false
-
 $ErrorActionPreference = "Stop"
+
+# ---------- helpers ----------
+function New-OrGet-PgServer {
+  param(
+    [string]$ResourceGroup,[string]$Name,[string]$Location,
+    [string]$AdminUser,[string]$AdminPassword,
+    [string]$Tier,[string]$SkuName
+  )
+
+  if (Az-Exists postgres flexible-server show -g $ResourceGroup -n $Name) {
+    Write-Host ">> Postgres server '$Name' already exists. Skipping."
+    return $Name
+  }
+
+  $base = $Name
+  for ($i=0; $i -lt 8; $i++) {
+    try {
+      Write-Host ">> Creating Postgres Flexible Server '$Name' ($Tier / $SkuName)..."
+      az postgres flexible-server create `
+        -g $ResourceGroup -n $Name -l $Location `
+        -u $AdminUser -p $AdminPassword `
+        --version 16 --tier $Tier --sku-name $SkuName --storage-size 32 --yes | Out-Null
+      return $Name
+    } catch {
+      $msg = $_.Exception.Message
+      if ($msg -match 'already used' -or $msg -match 'already taken' -or $msg -match 'AlreadyExists') {
+        $Name = "{0}{1}" -f $base, (Get-Random -Maximum 9999)
+        Write-Host "   Name in use. Retrying with '$Name'..."
+        continue
+      }
+      throw
+    }
+  }
+  throw "Could not create Postgres server based on '$base'. Try a more unique base name."
+}
+function Retry-Command {
+  param([scriptblock]$Script,[int]$Retries=5,[int]$DelaySeconds=6)
+  for ($i=1; $i -le $Retries; $i++) {
+    try { & $Script; return }
+    catch { if ($i -eq $Retries) { throw }; Start-Sleep -Seconds $DelaySeconds }
+  }
+}
+
+function Wait-ForWebApp {
+  param([string]$ResourceGroup,[string]$Name,[int]$TimeoutSeconds=120)
+  $stop=(Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    $exists = (Az-Exists webapp show -g $ResourceGroup -n $Name)
+    if ($exists) { return $true }
+    Start-Sleep -Seconds 5
+  } while ((Get-Date) -lt $stop)
+  return $false
+}
 
 function Ensure-Providers {
   param([string[]] $Namespaces)
-
   foreach ($ns in $Namespaces) {
     $state = az provider show -n $ns --query registrationState -o tsv 2>$null
     if (-not $state -or $state -ne "Registered") {
       Write-Host ">> Registering provider '$ns'..."
       az provider register -n $ns | Out-Null
-
-      # Wait until Registered (max ~3 minutes)
-      $tries = 0
+      $tries=0
       do {
         Start-Sleep -Seconds 6
         $state = az provider show -n $ns --query registrationState -o tsv 2>$null
         $tries++
       } while ($state -ne "Registered" -and $tries -lt 30)
-
-      if ($state -ne "Registered") {
-        throw "Provider '$ns' did not reach 'Registered' state in time."
-      }
-    } else {
-      Write-Host ">> Provider '$ns' already Registered."
-    }
+      if ($state -ne "Registered") { throw "Provider '$ns' did not reach 'Registered' state in time." }
+    } else { Write-Host ">> Provider '$ns' already Registered." }
   }
 }
 
@@ -96,14 +111,11 @@ function Az-Exists {
   $null = & cmd /c "$cmd >NUL 2>NUL"
   return ($LASTEXITCODE -eq 0)
 }
+
 Write-Host ">> Selecting subscription..." -ForegroundColor Cyan
 az account set --subscription $Subscription | Out-Null
 
-Ensure-Providers @(
-  "Microsoft.DBforPostgreSQL",
-  "Microsoft.ContainerRegistry",
-  "Microsoft.Web"
-)
+Ensure-Providers @("Microsoft.DBforPostgreSQL","Microsoft.ContainerRegistry","Microsoft.Web")
 
 # ---------- Resource Group ----------
 if (-not (Az-Exists group show -n $ResourceGroup)) {
@@ -122,40 +134,34 @@ if (-not (Az-Exists acr show -g $ResourceGroup -n $AcrName)) {
 }
 
 # ---------- Postgres Flexible Server ----------
-if (-not (Az-Exists postgres flexible-server show -g $ResourceGroup -n $PgServerName)) {
-  Write-Host ">> Creating Postgres Flexible Server '$PgServerName' ($Tier / $SkuName)..."
-  az postgres flexible-server create `
-    -g $ResourceGroup -n $PgServerName -l $Location `
-    -u $PgAdminUser -p $PgAdminPassword `
-    --version 16 --tier $Tier --sku-name $SkuName --storage-size 32 --yes | Out-Null
-} else {
-  Write-Host ">> Postgres server '$PgServerName' already exists. Skipping."
-}
+$PgServerName = New-OrGet-PgServer `
+  -ResourceGroup $ResourceGroup `
+  -Name $PgServerName `
+  -Location $Location `
+  -AdminUser $PgAdminUser `
+  -AdminPassword $PgAdminPassword `
+  -Tier $Tier `
+  -SkuName $SkuName
 
-# ---------- Database ----------
-if (-not (Az-Exists postgres flexible-server db show -g $ResourceGroup -s $PgServerName -d $PgDatabase)) {
-  Write-Host ">> Creating database '$PgDatabase'..."
-  az postgres flexible-server db create -g $ResourceGroup -s $PgServerName -d $PgDatabase | Out-Null
-} else {
-  Write-Host ">> Database '$PgDatabase' already exists. Skipping."
-}
+# ---------- firewall (only if server exists) ----------
+$pgExists = Az-Exists postgres flexible-server show -g $ResourceGroup -n $PgServerName
+if ($pgExists) {
+  # List rules with -n (server name)
+  $fwRules = az postgres flexible-server firewall-rule list -g $ResourceGroup -n $PgServerName --query "[].name" -o tsv 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $fwRules) { $fwRules = @() }
 
-# ---------- Firewall rule for Azure services (0.0.0.0) ----------
-# List existing rules (fix: use -n for server name)
-$fwRules = az postgres flexible-server firewall-rule list `
-  -g $ResourceGroup -n $PgServerName `
-  --query "[].name" -o tsv 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $fwRules) { $fwRules = @() }
-
-$fwRuleName = "AllowAllAzureIPs"
-if ($fwRules -notcontains $fwRuleName) {
-  Write-Host ">> Adding firewall rule '$fwRuleName'..."
-  az postgres flexible-server firewall-rule create `
-    -g $ResourceGroup -n $PgServerName `
-    --rule-name $fwRuleName `
-    --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 | Out-Null
+  $fwRuleName = "AllowAllAzureIPs"
+  if ($fwRules -notcontains $fwRuleName) {
+    Write-Host ">> Adding firewall rule '$fwRuleName'..."
+    az postgres flexible-server firewall-rule create `
+      -g $ResourceGroup -n $PgServerName `
+      --rule-name $fwRuleName `
+      --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 | Out-Null
+  } else {
+    Write-Host ">> Firewall rule '$fwRuleName' already exists. Skipping."
+  }
 } else {
-  Write-Host ">> Firewall rule '$fwRuleName' already exists. Skipping."
+  Write-Host ">> Postgres server not available; skipping DB + firewall this run."
 }
 
 # ---------- App Service Plan (Linux) ----------
@@ -170,31 +176,34 @@ if (-not (Az-Exists appservice plan show -g $ResourceGroup -n $planName)) {
 # ---------- Web App (API) ----------
 if (-not (Az-Exists webapp show -g $ResourceGroup -n $WebAppName)) {
   Write-Host ">> Creating Web App '$WebAppName' (container placeholder)..."
-  az webapp create `
-    -g $ResourceGroup `
-    -n $WebAppName `
-    -p $planName `
-    --deployment-container-image-name mcr.microsoft.com/dotnet/aspnet:9.0 | Out-Null
+  Retry-Command {
+    az webapp create `
+      -g $ResourceGroup `
+      -n $WebAppName `
+      -p $planName `
+      --deployment-container-image-name mcr.microsoft.com/dotnet/aspnet:9.0 | Out-Null
+  }
+
+  if (-not (Wait-ForWebApp -ResourceGroup $ResourceGroup -Name $WebAppName -TimeoutSeconds 180)) {
+    throw "Web App '$WebAppName' did not appear after creation."
+  }
 } else {
   Write-Host ">> Web App '$WebAppName' already exists. Skipping."
 }
-
 # ---------- Managed Identity on Web App ----------
 Write-Host ">> Enabling Managed Identity on Web App..."
-$principalId = az webapp identity assign -g $ResourceGroup -n $WebAppName --query principalId -o tsv
+$principalId = az webapp identity assign -g $ResourceGroup -n $WebAppName --query principalId -o tsv 2>$null
+if (-not $principalId) {
+  throw "Failed to enable Managed Identity on Web App '$WebAppName'."
+}
 
 # ---------- Grant AcrPull on ACR ----------
 Write-Host ">> Granting AcrPull role on ACR to Web App identity..."
 $acrId = az acr show -g $ResourceGroup -n $AcrName --query id -o tsv
-try {
-  az role assignment create --assignee $principalId --role "AcrPull" --scope $acrId | Out-Null
-} catch {
-  # Ignore if role assignment already exists
-}
+try { az role assignment create --assignee $principalId --role "AcrPull" --scope $acrId | Out-Null } catch {}
 
 # ---------- App settings on Web App ----------
 $pgHost = "$PgServerName.postgres.database.azure.com"
-
 Write-Host ">> Setting Web App application settings..."
 az webapp config appsettings set -g $ResourceGroup -n $WebAppName --settings `
   "ASPNETCORE_URLS=http://+:8080" `
@@ -210,13 +219,14 @@ az webapp config connection-string set `
   --settings DefaultConnection="$connectionString" `
   --connection-string-type=PostgreSQL | Out-Null
 
-# ---------- Container settings (use MI for ACR, AlwaysOn) ----------
+# ---------- AlwaysOn + ACR MI (no JSON quoting issues) ----------
 Write-Host ">> Configuring Web App container settings (Managed Identity for ACR, AlwaysOn)..."
-$siteId = az webapp show -g $ResourceGroup -n $WebAppName --query id -o tsv
+$siteId = az webapp show -g $ResourceGroup -n $WebAppName --query id -o tsv 2>$null
+if (-not $siteId) { throw "Web App '$WebAppName' not found after creation; aborting." }
 az resource update --ids $siteId --set properties.siteConfig.alwaysOn=true | Out-Null
 az resource update --ids $siteId --set properties.siteConfig.acrUseManagedIdentityCreds=true | Out-Null
 
-# (Your GitHub Action will set the actual container image + tag on each deploy)
+# (GitHub Actions will point the app to your ACR image:tag on deploy)
 
 # ---------- Optional: Static Web App for Angular ----------
 $swaLocation = "westeurope"  # valid SWA region
@@ -240,9 +250,7 @@ Write-Host "Postgres Host:          $pgHost"
 Write-Host "Postgres Admin User:    $PgAdminUser"
 Write-Host "Postgres DB:            $PgDatabase"
 Write-Host "PG Tier/SKU:            $Tier / $SkuName"
-if ($CreateStaticWebApp -and $StaticWebAppName) {
-  Write-Host "Static Web App:         $StaticWebAppName"
-}
+if ($CreateStaticWebApp -and $StaticWebAppName) { Write-Host "Static Web App:         $StaticWebAppName" }
 Write-Host "================================"
 Write-Host ""
 Write-Host "Next:"
