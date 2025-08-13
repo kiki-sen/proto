@@ -13,6 +13,7 @@ env:
   RG: ${{ secrets.AZURE_RG }}
   WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
   IMAGE_NAME: bookrecommenderapi
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   # Set context to the app’s top folder so subsequent paths can be short
   CONTEXT: BookRecommender
   DOCKERFILE: backend/BookRecommenderApi/Dockerfile
@@ -52,7 +53,7 @@ jobs:
             --enable-app-service-storage false
 
       - name: (Optional) Set OpenAI key as app setting
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        if: ${{ env.OPENAI_API_KEY != '' }}
         run: |
           az webapp config appsettings set -g $RG -n $WEBAPP_NAME --settings OpenAI__ApiKey=${{ secrets.OPENAI_API_KEY }}
 
