@@ -25,6 +25,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug AZURE_CREDENTIALS
+        run: |
+          echo "${{ secrets.AZURE_CREDENTIALS }}" | head -n 1
+
       - name: Azure login
         uses: azure/login@v2
         with:
