@@ -47,13 +47,45 @@ jobs:
         with:
           creds: ${{ steps.read_creds.outputs.json }}      
 
-      - name:  Debug ACR_NAME
+      - name: Debug ACR name
+        id: acr_dbg
+        shell: bash
         run: |
-          echo "${{ env.ACR_NAME }}"
-   
+          set -euo pipefail
+          RAW="${{ env.ACR_NAME }}"
+          echo "RAW env.ACR_NAME -> '${RAW}'"
+
+          # Normalize (handles 'myregistry.azurecr.io' or accidental URL paste)
+          NAME="$RAW"
+          NAME="${NAME#https://}"
+          NAME="${NAME#http://}"
+          NAME="${NAME%%.azurecr.io}"
+          NAME="$(echo "$NAME" | tr '[:upper:]' '[:lower:]')"
+
+          echo "Normalized -> '${NAME}'"
+          echo "Length -> ${#NAME}"
+          printf "ASCII codes -> "; echo -n "$NAME" | od -An -t u1
+
+          # Validate format: 5–50 lowercase letters/digits only
+          if [[ ! "$NAME" =~ ^[a-z0-9]{5,50}$ ]]; then
+            echo "::error::ACR name invalid. It must be the short name (e.g. 'myregistry'), NOT 'myregistry.azurecr.io'."
+            exit 1
+          fi
+
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "loginServer=${NAME}.azurecr.io" >> "$GITHUB_OUTPUT"
+
+      - name: Try ACR show (permission check)
+        shell: bash
+        run: |
+          set -e
+          az acr show -n "${{ steps.acr_dbg.outputs.name }}" -o table || {
+            echo "::error::'az acr show' failed. This usually means the service principal lacks access (needs AcrPush/Contributor on the ACR or its RG)."
+            exit 1
+          }
 
       - name: ACR login
-        run: az acr login --name ${{ env.ACR_NAME }}
+        run: az acr login --name ${{ steps.acr_dbg.outputs.name }}
 
       - name: Build & push image
         uses: docker/build-push-action@v6
