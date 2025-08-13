@@ -1,0 +1,60 @@
+name: BookRecommender API CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'BookRecommender/backend/**'
+      - '.github/workflows/bookrecommender-api.yml'
+  workflow_dispatch:
+
+env:
+  ACR_NAME: ${{ secrets.AZURE_ACR_NAME }}
+  RG: ${{ secrets.AZURE_RG }}
+  WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+  IMAGE_NAME: bookrecommenderapi
+  # Set context to the app’s top folder so subsequent paths can be short
+  CONTEXT: BookRecommender
+  DOCKERFILE: backend/BookRecommenderApi/Dockerfile
+  TAG: ${{ github.sha }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: ACR login
+        run: az acr login --name $ACR_NAME
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.CONTEXT }}
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          build-args: |
+            PROJECT_PATH=backend/BookRecommenderApi
+
+      - name: Configure Web App to use new image
+        run: |
+          az webapp config container set \
+            -g $RG -n $WEBAPP_NAME \
+            --container-image-name $ACR_NAME.azurecr.io/${IMAGE_NAME}:${TAG} \
+            --container-command "" \
+            --container-registry-private \
+            --enable-app-service-storage false
+
+      - name: (Optional) Set OpenAI key as app setting
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: |
+          az webapp config appsettings set -g $RG -n $WEBAPP_NAME --settings OpenAI__ApiKey=${{ secrets.OPENAI_API_KEY }}
+
+      - name: Restart Web App
+        run: az webapp restart -g $RG -n $WEBAPP_NAME
