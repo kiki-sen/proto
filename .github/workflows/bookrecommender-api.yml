@@ -30,11 +30,12 @@ jobs:
         run: echo "${{ secrets.AZURE_CREDENTIALS_B64 }}" | base64 --decode > $HOME/creds.json
 
       # Step 2 — Read creds.json into an output variable
-      - name: Read Azure credentials JSON
+      - name: Decode Azure credentials
         id: read_creds
         run: |
-          CREDS_JSON=$(cat $HOME/creds.json)
-          echo "json=$CREDS_JSON" >> $GITHUB_OUTPUT
+          echo 'json<<EOF' >> "$GITHUB_OUTPUT"
+          echo "${{ secrets.AZURE_CREDENTIALS_B64 }}" | base64 --decode >> "$GITHUB_OUTPUT"
+          echo 'EOF' >> "$GITHUB_OUTPUT"
 
       - name: Debug AZURE_CREDENTIALS
         run: |
