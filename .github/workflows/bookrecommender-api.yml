@@ -47,28 +47,13 @@ jobs:
         with:
           creds: ${{ steps.read_creds.outputs.json }}      
 
-      - name: Resolve ACR name from RG
-        id: acr
+      - name:  Debug ACR_NAME
         run: |
-          set -e
-          # List ACRs in the RG
-          NAMES=$(az acr list -g "$RG" --query "[].name" -o tsv)
-          if [ -z "$NAMES" ]; then
-            echo "No ACR found in resource group '$RG'." >&2
-            exit 1
-          fi
-          COUNT=$(echo "$NAMES" | wc -w)
-          if [ "$COUNT" -gt 1 ]; then
-            echo "Multiple ACRs found in RG '$RG': $NAMES" >&2
-            echo "Set env AZURE_ACR_NAME to the one you want, or keep only one in the RG." >&2
-            exit 1
-          fi
-          NAME="$NAMES"
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "loginServer=${NAME}.azurecr.io" >> "$GITHUB_OUTPUT"      
+          echo "${{ env.ACR_NAME }}"
+   
 
       - name: ACR login
-        run: az acr login --name ${{ steps.acr.outputs.name }}
+        run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Build & push image
         uses: docker/build-push-action@v6
