@@ -47,23 +47,25 @@ jobs:
         with:
           creds: ${{ steps.read_creds.outputs.json }}      
 
-      - name: Normalize ACR name
+      - name: Resolve ACR name from RG
         id: acr
         run: |
-          NAME="${{ env.ACR_NAME }}"
-          # strip scheme if someone pasted a URL
-          NAME="${NAME#https://}"
-          NAME="${NAME#http://}"
-          # strip login server suffix if present
-          NAME="${NAME%%.azurecr.io}"
-          # lowercase
-          NAME="$(echo "$NAME" | tr '[:upper:]' '[:lower:]')"
-          # validate
-          if [[ ! "$NAME" =~ ^[a-z0-9]{5,50}$ ]]; then
-            echo "ACR name '$NAME' looks invalid. It must be the short name (e.g. 'myregistry'), not 'myregistry.azurecr.io'." >&2
+          set -e
+          # List ACRs in the RG
+          NAMES=$(az acr list -g "$RG" --query "[].name" -o tsv)
+          if [ -z "$NAMES" ]; then
+            echo "No ACR found in resource group '$RG'." >&2
             exit 1
           fi
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"          
+          COUNT=$(echo "$NAMES" | wc -w)
+          if [ "$COUNT" -gt 1 ]; then
+            echo "Multiple ACRs found in RG '$RG': $NAMES" >&2
+            echo "Set env AZURE_ACR_NAME to the one you want, or keep only one in the RG." >&2
+            exit 1
+          fi
+          NAME="$NAMES"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "loginServer=${NAME}.azurecr.io" >> "$GITHUB_OUTPUT"      
 
       - name: ACR login
         run: az acr login --name ${{ steps.acr.outputs.name }}
