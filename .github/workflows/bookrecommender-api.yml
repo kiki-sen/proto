@@ -97,53 +97,45 @@ jobs:
           build-args: |
             PROJECT_PATH=backend/BookRecommenderApi
 
-
-      - name: Show current account and role assignments
-        run: |
-          echo "=== Account Info ==="
-          az account show --output table
-
-          SUB_ID=$(az account show --query id -o tsv)
-          OBJ_ID=$(az ad sp show --id $(az account show --query user.name -o tsv) --query id -o tsv)
-
-          echo "Subscription: $SUB_ID"
-          echo "Object ID: $OBJ_ID"
-
-          echo "=== Roles for SP in RG ==="
-          az role assignment list \
-            --assignee "$OBJ_ID" \
-            --scope "/subscriptions/$SUB_ID/resourceGroups/bookrec-rg" \
-            -o table
-
-      - name: Ensure Web App has a system-assigned identity
+      # Ensure Web App has system-assigned identity
+      - name: Ensure Web App has system-assigned identity
         id: mi
         run: |
           set -e
-          MI_JSON=$(az webapp identity assign -g "$RG" -n "$WEBAPP_NAME")
-          # principalId often exists already; reassign is idempotent
-          PRINCIPAL_ID=$(echo "$MI_JSON" | jq -r '.principalId')
-          echo "principalId=$PRINCIPAL_ID" >> "$GITHUB_OUTPUT"
+          MI_TYPE="$(az webapp show -g "$RG" -n "$WEBAPP_NAME" --query 'identity.type' -o tsv || true)"
+          if [ "$MI_TYPE" != "SystemAssigned" ] && [ "$MI_TYPE" != "SystemAssigned,UserAssigned" ]; then
+            az webapp identity assign -g "$RG" -n "$WEBAPP_NAME" >/dev/null
+          fi
+          PID="$(az webapp show -g "$RG" -n "$WEBAPP_NAME" --query 'identity.principalId' -o tsv)"
+          echo "principalId=$PID" >> "$GITHUB_OUTPUT"
 
-      - name: Grant AcrPull on the ACR to the Web App identity
+      # Grant AcrPull role only if missing
+      - name: Grant AcrPull to Web App MI if not present
         run: |
-          APP_PID="${{ steps.mi.outputs.principalId }}"
-          SUB_ID=$(az account show --query id -o tsv)
-          az role assignment create \
-            --assignee "$APP_PID" \
-            --role AcrPull \
-            --scope "/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
+          set -e
+          SUB_ID="$(az account show --query id -o tsv)"
+          PID="${{ steps.mi.outputs.principalId }}"
+          ACR="${{ steps.acr_dbg.outputs.name }}"
+          SCOPE="/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.ContainerRegistry/registries/$ACR"
 
-      - name: Configure Web App container (Managed Identity pull)
+          if az role assignment list --assignee "$PID" --scope "$SCOPE" --query "[?roleDefinitionName=='AcrPull']" -o tsv | grep -q .; then
+            echo "AcrPull already assigned to $PID on $SCOPE"
+          else
+            echo "Assigning AcrPull to $PID on $SCOPE"
+            az role assignment create --assignee "$PID" --role AcrPull --scope "$SCOPE" >/dev/null
+          fi
+
+      # Wait for RBAC to propagate
+      - run: sleep 10
+
+      # Configure Web App container to use MI
+      - name: Configure Web App for MI-based ACR pull
         run: |
-          az webapp config container set \
-            -g "$RG" -n "$WEBAPP_NAME" \
-            --docker-custom-image-name "$ACR_NAME.azurecr.io/${IMAGE_NAME}:${TAG}" \
-            --docker-registry-server-url "https://$ACR_NAME.azurecr.io"
-
-          # Tell App Service to use its managed identity to pull from ACR
+          set -e
+          az webapp config container set -g "$RG" -n "$WEBAPP_NAME" \
+            --docker-custom-image-name "${{ steps.acr_dbg.outputs.loginServer }}/${IMAGE_NAME}:${TAG}" \
+            --docker-registry-server-url "https://${{ steps.acr_dbg.outputs.loginServer }}"
           az webapp config set -g "$RG" -n "$WEBAPP_NAME" --acr-use-managed-identity true
-
-          # Port setting if needed
           az webapp config appsettings set -g "$RG" -n "$WEBAPP_NAME" --settings WEBSITES_PORT=8080
 
       - name: (Optional) Set OpenAI key as app setting
