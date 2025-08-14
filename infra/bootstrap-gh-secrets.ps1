@@ -43,6 +43,13 @@ if (-not $AcrName) {
 }
 Write-Host "ACR: $AcrName"
 
+# AZURE_WEBAPP_MI_PRINCIPAL_ID 
+if (-not $azurepid) {
+  $azurepid = az webapp show -n bookrec-api -g bookrec-rg --query identity.principalId -o tsv
+  if (-not $azurepid) { Write-Error "No pid found."; exit 1 }
+}
+Write-Host "AZURE_WEBAPP_MI_PRINCIPAL_ID : $azurepid"
+
 # SWA token (optional)
 $SwaToken = ""
 if ($SwaName) {
@@ -78,6 +85,7 @@ function Set-Secret($name, $value) {
 # Service principal / AZURE_CREDENTIALS
 if (-not $SpName) { $SpName = "github-deploy-$($Repo.Split('/')[1])" }
 $scope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
+
 
 # Only (re)generate credentials if:
 #  - AZURE_CREDENTIALS secret doesn't exist, or
@@ -141,6 +149,7 @@ if ($spJson) { Set-Secret "AZURE_CREDENTIALS" $spJson }
 Set-Secret "AZURE_RG" $ResourceGroup
 Set-Secret "AZURE_WEBAPP_NAME" $WebAppName
 Set-Secret "AZURE_ACR_NAME" $AcrName
+Set-Secret "AZURE_WEBAPP_MI_PRINCIPAL_ID" $azurepid
 if ($OpenAiApiKey) { Set-Secret "OPENAI_API_KEY" $OpenAiApiKey }
 if ($SwaToken) { Set-Secret "AZURE_STATIC_WEB_APPS_API_TOKEN" $SwaToken } else { Write-Host "No SWA token set." }
 

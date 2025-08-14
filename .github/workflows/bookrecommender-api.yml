@@ -14,6 +14,7 @@ env:
   WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
   IMAGE_NAME: bookrecommenderapi
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  AZURE_WEBAPP_MI_PRINCIPAL_ID: ${{ secrets.AZURE_WEBAPP_MI_PRINCIPAL_ID }}
   # Set context to the app’s top folder so subsequent paths can be short
   CONTEXT: BookRecommender
   DOCKERFILE: BookRecommender/backend/BookRecommenderApi/Dockerfile
@@ -97,14 +98,19 @@ jobs:
           build-args: |
             PROJECT_PATH=backend/BookRecommenderApi
 
-      # Grant AcrPull to the Web App MI (idempotent)
       - name: Grant AcrPull to Web App MI if not present
         run: |
           set -e
           SUB_ID="$(az account show --query id -o tsv)"
-          PID="${{ secrets.AZURE_WEBAPP_MI_PRINCIPAL_ID }}"
+          PID="${{ env.AZURE_WEBAPP_MI_PRINCIPAL_ID }}"
           ACR="${{ steps.acr_dbg.outputs.name }}"
           SCOPE="/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.ContainerRegistry/registries/$ACR"
+
+          # validate PID looks like a GUID
+          if ! echo "$PID" | grep -Eq '^[0-9a-fA-F-]{36}$'; then
+            echo "::error::AZURE_WEBAPP_MI_PRINCIPAL_ID is missing or invalid. Set it to the Web App's managed identity principalId." >&2
+            exit 1
+          fi
 
           if az role assignment list --assignee "$PID" --scope "$SCOPE" --query "[?roleDefinitionName=='AcrPull']" -o tsv | grep -q .; then
             echo "AcrPull already assigned to $PID on $SCOPE"
