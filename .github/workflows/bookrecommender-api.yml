@@ -93,9 +93,9 @@ jobs:
           context: ${{ env.CONTEXT }}
           file: ${{ env.DOCKERFILE }}
           push: true
-          tags: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          tags: ${{ steps.acr_dbg.outputs.loginServer }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
           build-args: |
-            PROJECT_PATH=backend/BookRecommenderApi
+            PROJECT_PATH=BookRecommender/backend/BookRecommenderApi
 
       - name: Configure Web App to use new image
         run: |
