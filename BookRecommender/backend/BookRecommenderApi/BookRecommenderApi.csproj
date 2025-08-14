@@ -19,7 +19,7 @@
     <PackageReference Include="OpenAI" Version="2.3.0" />
   </ItemGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(OS)'=='Windows_NT' and '$(GITHUB_ACTIONS)'!='true'">
     <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(ProjectDir)\connect-to-compose-network.ps1&quot;&#xD;&#xA;" />
   </Target>
 

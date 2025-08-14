@@ -1,9 +1,3 @@
-# If running on github, skip this script
-if ($env:GITHUB_ACTIONS -eq "true") {
-    Write-Host "Skipping container network connect in CI environment."
-    exit 0
-}
-
 # give Docker time to launch container
 Start-Sleep -Seconds 3
 
