@@ -97,24 +97,12 @@ jobs:
           build-args: |
             PROJECT_PATH=backend/BookRecommenderApi
 
-      # Ensure Web App has system-assigned identity
-      - name: Ensure Web App has system-assigned identity
-        id: mi
-        run: |
-          set -e
-          MI_TYPE="$(az webapp show -g "$RG" -n "$WEBAPP_NAME" --query 'identity.type' -o tsv || true)"
-          if [ "$MI_TYPE" != "SystemAssigned" ] && [ "$MI_TYPE" != "SystemAssigned,UserAssigned" ]; then
-            az webapp identity assign -g "$RG" -n "$WEBAPP_NAME" >/dev/null
-          fi
-          PID="$(az webapp show -g "$RG" -n "$WEBAPP_NAME" --query 'identity.principalId' -o tsv)"
-          echo "principalId=$PID" >> "$GITHUB_OUTPUT"
-
-      # Grant AcrPull role only if missing
+      # Grant AcrPull to the Web App MI (idempotent)
       - name: Grant AcrPull to Web App MI if not present
         run: |
           set -e
           SUB_ID="$(az account show --query id -o tsv)"
-          PID="${{ steps.mi.outputs.principalId }}"
+          PID="${{ secrets.AZURE_WEBAPP_MI_PRINCIPAL_ID }}"
           ACR="${{ steps.acr_dbg.outputs.name }}"
           SCOPE="/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.ContainerRegistry/registries/$ACR"
 
@@ -125,10 +113,7 @@ jobs:
             az role assignment create --assignee "$PID" --role AcrPull --scope "$SCOPE" >/dev/null
           fi
 
-      # Wait for RBAC to propagate
-      - run: sleep 10
-
-      # Configure Web App container to use MI
+      # Configure Web App to use MI for ACR pulls (no pre-read)
       - name: Configure Web App for MI-based ACR pull
         run: |
           set -e
