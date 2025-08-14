@@ -97,23 +97,36 @@ jobs:
           build-args: |
             PROJECT_PATH=backend/BookRecommenderApi
 
-      - name: Point Web App to the new image (ACR creds)
+      - name: Ensure Web App has a system-assigned identity
+        id: mi
         run: |
           set -e
-          USER=$(az acr credential show -n "$ACR_NAME" --query username -o tsv)
-          PASS=$(az acr credential show -n "$ACR_NAME" --query 'passwords[0].value' -o tsv)
+          MI_JSON=$(az webapp identity assign -g "$RG" -n "$WEBAPP_NAME")
+          # principalId often exists already; reassign is idempotent
+          PRINCIPAL_ID=$(echo "$MI_JSON" | jq -r '.principalId')
+          echo "principalId=$PRINCIPAL_ID" >> "$GITHUB_OUTPUT"
 
+      - name: Grant AcrPull on the ACR to the Web App identity
+        run: |
+          APP_PID="${{ steps.mi.outputs.principalId }}"
+          SUB_ID=$(az account show --query id -o tsv)
+          az role assignment create \
+            --assignee "$APP_PID" \
+            --role AcrPull \
+            --scope "/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
+
+      - name: Configure Web App container (Managed Identity pull)
+        run: |
           az webapp config container set \
             -g "$RG" -n "$WEBAPP_NAME" \
             --docker-custom-image-name "$ACR_NAME.azurecr.io/${IMAGE_NAME}:${TAG}" \
-            --docker-registry-server-url "https://$ACR_NAME.azurecr.io" \
-            --docker-registry-server-user "$USER" \
-            --docker-registry-server-password "$PASS"
+            --docker-registry-server-url "https://$ACR_NAME.azurecr.io"
 
-          # Tell App Service which port container listens on
-          az webapp config appsettings set \
-            -g "$RG" -n "$WEBAPP_NAME" \
-            --settings WEBSITES_PORT=8080
+          # Tell App Service to use its managed identity to pull from ACR
+          az webapp config set -g "$RG" -n "$WEBAPP_NAME" --acr-use-managed-identity true
+
+          # Port setting if needed
+          az webapp config appsettings set -g "$RG" -n "$WEBAPP_NAME" --settings WEBSITES_PORT=8080
 
       - name: (Optional) Set OpenAI key as app setting
         if: ${{ env.OPENAI_API_KEY != '' }}
