@@ -97,6 +97,24 @@ jobs:
           build-args: |
             PROJECT_PATH=backend/BookRecommenderApi
 
+
+      - name: Show current account and role assignments
+        run: |
+          echo "=== Account Info ==="
+          az account show --output table
+
+          SUB_ID=$(az account show --query id -o tsv)
+          OBJ_ID=$(az ad sp show --id $(az account show --query user.name -o tsv) --query id -o tsv)
+
+          echo "Subscription: $SUB_ID"
+          echo "Object ID: $OBJ_ID"
+
+          echo "=== Roles for SP in RG ==="
+          az role assignment list \
+            --assignee "$OBJ_ID" \
+            --scope "/subscriptions/$SUB_ID/resourceGroups/bookrec-rg" \
+            -o table
+
       - name: Ensure Web App has a system-assigned identity
         id: mi
         run: |
