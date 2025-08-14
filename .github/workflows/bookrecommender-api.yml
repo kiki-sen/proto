@@ -16,7 +16,7 @@ env:
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   # Set context to the app’s top folder so subsequent paths can be short
   CONTEXT: BookRecommender
-  DOCKERFILE: backend/BookRecommenderApi/Dockerfile
+  DOCKERFILE: BookRecommender/backend/BookRecommenderApi/Dockerfile
   TAG: ${{ github.sha }}
 
 jobs:
@@ -95,7 +95,7 @@ jobs:
           push: true
           tags: ${{ steps.acr_dbg.outputs.loginServer }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
           build-args: |
-            PROJECT_PATH=BookRecommender/backend/BookRecommenderApi
+            PROJECT_PATH=backend/BookRecommenderApi
 
       - name: Configure Web App to use new image
         run: |
