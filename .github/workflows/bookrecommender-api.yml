@@ -106,10 +106,14 @@ jobs:
           az account set --subscription "$SUB_FROM_CREDS"
           az account show -o table
 
+      - name: Register Microsoft.Web provider
+        run: az provider register -n Microsoft.Web          
+
       # Point Web App to image using new container-* flags
       - name: Configure container image (MI)
         run: |
           set -e
+
           SUB_ID="$(az account show --query id -o tsv)"
           SITE_ID="/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.Web/sites/$WEBAPP_NAME"
           CONFIG_URI="$SITE_ID/config/web?api-version=2022-09-01"
