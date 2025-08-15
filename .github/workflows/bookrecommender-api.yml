@@ -112,7 +112,7 @@ jobs:
           set -e
           az webapp config container set \
             -g "$RG" -n "$WEBAPP_NAME" \
-            --acr-use-managed-identity true \
+            --enable-acr-managed-identity true \
             --container-image-name "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${TAG}" \
             --container-registry-url "https://${ACR_NAME}.azurecr.io"
 
