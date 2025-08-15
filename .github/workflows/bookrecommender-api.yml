@@ -110,11 +110,17 @@ jobs:
       - name: Configure container image (MI)
         run: |
           set -e
+
+          # 1. Set container image and registry (no credentials)
           az webapp config container set \
             -g "$RG" -n "$WEBAPP_NAME" \
-            --enable-acr-managed-identity true \
             --container-image-name "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${TAG}" \
             --container-registry-url "https://${ACR_NAME}.azurecr.io"
+
+          # 2. Enable ACR pull via managed identity
+          az webapp config set \
+            -g "$RG" -n "$WEBAPP_NAME" \
+            --generic-configurations '{"acrUseManagedIdentityCreds": true}'
 
       # Small wait for config/role propagation
       - name: Wait a bit
