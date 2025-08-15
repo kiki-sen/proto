@@ -38,9 +38,9 @@ jobs:
           echo "${{ secrets.AZURE_CREDENTIALS_B64 }}" | base64 --decode >> "$GITHUB_OUTPUT"
           echo 'EOF' >> "$GITHUB_OUTPUT"
 
-      - name: Debug AZURE_CREDENTIALS
-        run: |
-          echo "${{ steps.read_creds.outputs.json }}"
+      # - name: Debug AZURE_CREDENTIALS
+      #   run: |
+      #     echo "${{ steps.read_creds.outputs.json }}"
 
       # Step 3 — Login to Azure using the decoded JSON
       - name: Azure login
@@ -111,28 +111,22 @@ jobs:
         run: |
           set -e
 
-          # 1. Set container image and registry (no credentials)
-          az webapp config container set \
-            -g "$RG" -n "$WEBAPP_NAME" \
-            --container-image-name "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${TAG}" \
-            --container-registry-url "https://${ACR_NAME}.azurecr.io"
+          # Derive the resource IDs (no reads needed)
+          SUB_ID="$(az account show --query id -o tsv)"
+          SITE_ID="/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.Web/sites/$WEBAPP_NAME"
+          CONFIG_ID="$SITE_ID/config/web"
+          APPSETTINGS_ID="$SITE_ID/config/appsettings"
 
-          # 2. Enable ACR pull via managed identity
-          az webapp config set \
-            -g "$RG" -n "$WEBAPP_NAME" \
-            --generic-configurations '{"acrUseManagedIdentityCreds": true}'
+          # 1) Enable ACR pull via Managed Identity (ARM patch)
+          az resource update --ids "$CONFIG_ID" --set properties.acrUseManagedIdentityCreds=true
 
-      # Small wait for config/role propagation
-      - name: Wait a bit
-        run: sleep 10
+          # 2) Point container image (ARM patch; avoids registry cred lookup)
+          az resource update --ids "$CONFIG_ID" \
+            --set properties.linuxFxVersion="DOCKER|${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${TAG}"
 
-      # Set container port (optional)
-      - name: Set WEBSITES_PORT
-        run: |
-          set -e
-          az webapp config appsettings set \
-            -g "$RG" -n "$WEBAPP_NAME" \
-            --settings WEBSITES_PORT=8080
+          # 3) Set container port without listing appsettings
+          az resource update --ids "$APPSETTINGS_ID" \
+            --set properties.WEBSITES_PORT="8080"
 
       - name: (Optional) Set OpenAI key as app setting
         if: ${{ env.OPENAI_API_KEY != '' }}
