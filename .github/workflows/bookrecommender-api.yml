@@ -110,23 +110,17 @@ jobs:
       - name: Configure container image (MI)
         run: |
           set -e
-
-          # Derive the resource IDs (no reads needed)
           SUB_ID="$(az account show --query id -o tsv)"
           SITE_ID="/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.Web/sites/$WEBAPP_NAME"
-          CONFIG_ID="$SITE_ID/config/web"
-          APPSETTINGS_ID="$SITE_ID/config/appsettings"
+          CONFIG_URI="$SITE_ID/config/web?api-version=2022-09-01"
 
-          # 1) Enable ACR pull via Managed Identity (ARM patch)
-          az resource update --ids "$CONFIG_ID" --set properties.acrUseManagedIdentityCreds=true
+          # A) enable MI for ACR pull
+          az rest --method PATCH --uri "$CONFIG_URI" \
+            --body '{"properties":{"acrUseManagedIdentityCreds":true}}'
 
-          # 2) Point container image (ARM patch; avoids registry cred lookup)
-          az resource update --ids "$CONFIG_ID" \
-            --set properties.linuxFxVersion="DOCKER|${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${TAG}"
-
-          # 3) Set container port without listing appsettings
-          az resource update --ids "$APPSETTINGS_ID" \
-            --set properties.WEBSITES_PORT="8080"
+          # B) point to the container image
+          az rest --method PATCH --uri "$CONFIG_URI" \
+            --body "{\"properties\":{\"linuxFxVersion\":\"DOCKER|${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${TAG}\"}}"
 
       - name: (Optional) Set OpenAI key as app setting
         if: ${{ env.OPENAI_API_KEY != '' }}
