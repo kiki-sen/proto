@@ -122,10 +122,10 @@ if ($needCreds) {
       $tenantId = az account show --query tenantId -o tsv
       
       # Validate all required fields
-      if (-not $appId -or $appId -eq "null") { throw "Failed to get app ID" }
-      if (-not $password -or $password -eq "null") { throw "Failed to get client secret" }
-      if (-not $tenantId -or $tenantId -eq "null") { throw "Failed to get tenant ID" }
-      if (-not $SubscriptionId -or $SubscriptionId -eq "null") { throw "Subscription ID is missing" }
+      if (-not $appId -or $appId -eq "null" -or [string]::IsNullOrWhiteSpace($appId)) { throw "Failed to get app ID" }
+      if (-not $password -or $password -eq "null" -or [string]::IsNullOrWhiteSpace($password)) { throw "Failed to get client secret" }
+      if (-not $tenantId -or $tenantId -eq "null" -or [string]::IsNullOrWhiteSpace($tenantId)) { throw "Failed to get tenant ID" }
+      if (-not $SubscriptionId -or $SubscriptionId -eq "null" -or [string]::IsNullOrWhiteSpace($SubscriptionId)) { throw "Subscription ID is missing" }
       
       # Use ordered hashtable to ensure consistent JSON structure
       $spObj = [ordered]@{

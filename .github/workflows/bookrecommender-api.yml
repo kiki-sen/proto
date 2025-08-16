@@ -34,9 +34,15 @@ jobs:
           echo '${{ secrets.AZURE_CREDENTIALS }}' >> "$GITHUB_OUTPUT"
           echo 'EOF' >> "$GITHUB_OUTPUT"
 
-      # - name: Debug AZURE_CREDENTIALS
-      #   run: |
-      #     echo "${{ steps.read_creds.outputs.json }}"
+      - name: Debug AZURE_CREDENTIALS
+        run: |
+          echo "JSON first 50 chars: ${AZURE_CREDS:0:50}..."
+          echo "JSON length: ${#AZURE_CREDS}"
+          echo "First char ASCII: $(printf '%d' "'${AZURE_CREDS:0:1}")"
+          echo "Valid JSON test:"
+          echo "$AZURE_CREDS" | jq . > /dev/null && echo "✓ Valid JSON" || echo "✗ Invalid JSON"
+        env:
+          AZURE_CREDS: ${{ steps.read_creds.outputs.json }}
 
       # Step 3 — Login to Azure using the decoded JSON
       - name: Azure login
