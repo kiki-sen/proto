@@ -103,7 +103,11 @@ if ($needCreds) {
   Write-Host "Ensuring service principal '$SpName' and generating credentials..."
   try {
     # Try create; if exists, fall into catch
-    $spJson = az ad sp create-for-rbac --name $SpName --sdk-auth --role contributor --scopes $scope | Out-String
+    $spJsonRaw = az ad sp create-for-rbac --name $SpName --sdk-auth --role contributor --scopes $scope
+    if ($LASTEXITCODE -eq 0 -and $spJsonRaw) {
+      $spJson = $spJsonRaw | Out-String
+      $spJson = $spJson.Trim()
+    }
   } catch {
     # Reuse existing SP, rotate secret only if requested (or if AZURE_CREDENTIALS missing)
     $appId = az ad sp list --display-name $SpName --query "[0].appId" -o tsv
@@ -111,7 +115,8 @@ if ($needCreds) {
     if ($RotateSpCredential -or (-not $existing.ContainsKey('AZURE_CREDENTIALS')) -or $Force) {
       $password = az ad app credential reset --id $appId --append --query password -o tsv
       $tenantId = az account show --query tenantId -o tsv
-      $spObj = @{
+      # Use ordered hashtable to ensure consistent JSON structure
+      $spObj = [ordered]@{
         clientId = $appId
         clientSecret = $password
         subscriptionId = $SubscriptionId
@@ -123,7 +128,7 @@ if ($needCreds) {
         galleryEndpointUrl = "https://gallery.azure.com/"
         managementEndpointUrl = "https://management.core.windows.net/"
       }
-      $spJson = ($spObj | ConvertTo-Json -Compress)
+      $spJson = ($spObj | ConvertTo-Json -Compress -Depth 10)
     } else {
       Write-Host "AZURE_CREDENTIALS already exists; not rotating SP secret (use -RotateSpCredential to rotate)."
     }
@@ -152,10 +157,37 @@ if (-not $OpenAiApiKey -and (Get-Command dotnet -ErrorAction SilentlyContinue)) 
 
 # Push secrets
 if ($spJson) { 
+  # Validate JSON before setting secrets
+  try {
+    $testObj = $spJson | ConvertFrom-Json
+    if (-not $testObj.clientId -or -not $testObj.clientSecret) {
+      throw "Invalid JSON structure - missing required fields"
+    }
+  } catch {
+    Write-Error "Generated JSON is invalid: $_"
+    Write-Host "JSON content: $spJson"
+    exit 1
+  }
+  
   Set-Secret "AZURE_CREDENTIALS" $spJson 
+  
   # Also create base64 encoded version for workflows that need it
-  $spJsonB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($spJson))
-  Set-Secret "AZURE_CREDENTIALS_B64" $spJsonB64
+  try {
+    $spJsonBytes = [System.Text.Encoding]::UTF8.GetBytes($spJson)
+    $spJsonB64 = [Convert]::ToBase64String($spJsonBytes)
+    
+    # Validate the base64 encoding by decoding it back
+    $testDecode = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($spJsonB64))
+    if ($testDecode -ne $spJson) {
+      throw "Base64 encoding/decoding test failed"
+    }
+    
+    Write-Host "Base64 validation successful (length: $($spJsonB64.Length))"
+    Set-Secret "AZURE_CREDENTIALS_B64" $spJsonB64
+  } catch {
+    Write-Error "Failed to create base64 encoded credentials: $_"
+    exit 1
+  }
 }
 Set-Secret "AZURE_RG" $ResourceGroup
 Set-Secret "AZURE_WEBAPP_NAME" $WebAppName
