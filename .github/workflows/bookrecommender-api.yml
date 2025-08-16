@@ -20,17 +20,23 @@ env:
   DOCKERFILE: BookRecommender/backend/BookRecommenderApi/Dockerfile
   TAG: ${{ github.sha }}
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Login to Azure using service principal with JSON credentials
+      # Login to Azure using OIDC (recommended approach)
       - name: Azure login
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: 9c7542ed-da86-4f5a-beb8-b4df942839ec
+          tenant-id: b0c8aded-3ec9-4c08-9bb8-cda5bda8bbc4
+          subscription-id: 55e0f899-1653-4f68-8e9c-4c2a07ab2499
 
       - name: Debug ACR name
         id: acr_dbg
@@ -86,8 +92,7 @@ jobs:
       - name: Ensure correct subscription context
         run: |
           set -e
-          SUB_FROM_CREDS="$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId)"
-          az account set --subscription "$SUB_FROM_CREDS"
+          az account set --subscription "55e0f899-1653-4f68-8e9c-4c2a07ab2499"
           az account show -o table
           
           # Wait a bit for RBAC propagation (in case permissions were just granted)
