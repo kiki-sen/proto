@@ -175,12 +175,21 @@ if ($spJson) {
     if (-not $testObj.clientId -or -not $testObj.clientSecret) {
       throw "Invalid JSON structure - missing required fields"
     }
+    
+    # Create individual credential secrets (recommended approach)
+    Write-Host "Creating individual credential secrets (recommended)..."
+    Set-Secret "AZURE_CLIENT_ID" $testObj.clientId
+    Set-Secret "AZURE_CLIENT_SECRET" $testObj.clientSecret
+    Set-Secret "AZURE_TENANT_ID" $testObj.tenantId
+    Set-Secret "AZURE_SUBSCRIPTION_ID" $testObj.subscriptionId
+    
   } catch {
     Write-Error "Generated JSON is invalid: $_"
     Write-Host "JSON content: $spJson"
     exit 1
   }
   
+  # Also create legacy JSON format for backwards compatibility
   Set-Secret "AZURE_CREDENTIALS" $spJson 
   
   # Also create base64 encoded version for workflows that need it
