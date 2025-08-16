@@ -105,22 +105,34 @@ if ($needCreds) {
     # Try create; if exists, fall into catch
     $spJsonRaw = az ad sp create-for-rbac --name $SpName --sdk-auth --role contributor --scopes $scope
     if ($LASTEXITCODE -eq 0 -and $spJsonRaw) {
-      $spJson = $spJsonRaw | Out-String
-      $spJson = $spJson.Trim()
+      # Clean up the raw JSON output
+      $spJsonLines = $spJsonRaw | Where-Object { $_ -and $_.Trim() }
+      $spJson = ($spJsonLines -join "").Trim()
+      
+      # Validate it's proper JSON
+      try { $spJson | ConvertFrom-Json | Out-Null } catch { throw "Invalid JSON from az create-for-rbac: $spJson" }
     }
   } catch {
     # Reuse existing SP, rotate secret only if requested (or if AZURE_CREDENTIALS missing)
     $appId = az ad sp list --display-name $SpName --query "[0].appId" -o tsv
-    if (-not $appId) { throw "Service principal '$SpName' not found and could not be created." }
+    if (-not $appId -or $appId -eq "null") { throw "Service principal '$SpName' not found and could not be created." }
+    
     if ($RotateSpCredential -or (-not $existing.ContainsKey('AZURE_CREDENTIALS')) -or $Force) {
       $password = az ad app credential reset --id $appId --append --query password -o tsv
       $tenantId = az account show --query tenantId -o tsv
+      
+      # Validate all required fields
+      if (-not $appId -or $appId -eq "null") { throw "Failed to get app ID" }
+      if (-not $password -or $password -eq "null") { throw "Failed to get client secret" }
+      if (-not $tenantId -or $tenantId -eq "null") { throw "Failed to get tenant ID" }
+      if (-not $SubscriptionId -or $SubscriptionId -eq "null") { throw "Subscription ID is missing" }
+      
       # Use ordered hashtable to ensure consistent JSON structure
       $spObj = [ordered]@{
-        clientId = $appId
-        clientSecret = $password
-        subscriptionId = $SubscriptionId
-        tenantId = $tenantId
+        clientId = $appId.Trim()
+        clientSecret = $password.Trim()
+        subscriptionId = $SubscriptionId.Trim()
+        tenantId = $tenantId.Trim()
         activeDirectoryEndpointUrl = "https://login.microsoftonline.com"
         resourceManagerEndpointUrl = "https://management.azure.com/"
         activeDirectoryGraphResourceId = "https://graph.windows.net/"
