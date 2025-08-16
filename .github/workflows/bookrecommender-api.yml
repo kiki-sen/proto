@@ -30,6 +30,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Debug: Validate all credential secrets before login
+      - name: Debug credential secrets
+        run: |
+          echo "Client ID length: ${#CLIENT_ID}"
+          echo "Tenant ID length: ${#TENANT_ID}"
+          echo "Subscription ID length: ${#SUB_ID}"
+          echo "Client ID format: $(echo $CLIENT_ID | sed 's/[0-9a-f]/X/g')"
+          echo "Tenant ID format: $(echo $TENANT_ID | sed 's/[0-9a-f]/X/g')"
+          echo "Sub ID format: $(echo $SUB_ID | sed 's/[0-9a-f]/X/g')"
+          
+          # Validate GUID formats
+          if [[ $CLIENT_ID =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "✓ Client ID: Valid GUID"
+          else
+            echo "✗ Client ID: Invalid GUID"
+            exit 1
+          fi
+          
+          if [[ $TENANT_ID =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "✓ Tenant ID: Valid GUID"
+          else
+            echo "✗ Tenant ID: Invalid GUID"
+            exit 1
+          fi
+          
+          if [[ $SUB_ID =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "✓ Subscription ID: Valid GUID"
+          else
+            echo "✗ Subscription ID: Invalid GUID"
+            exit 1
+          fi
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       # Login to Azure using OIDC (recommended approach)
       - name: Azure login
         uses: azure/login@v2

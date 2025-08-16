@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ResourceGroup = "bookrec-rg",
   [string]$WebAppName = "bookrec-api",
   [string]$AcrName,
@@ -9,6 +9,7 @@ param(
   [string]$OpenAiApiKey = $env:OPENAI_API_KEY,
   [switch]$Force,                 # overwrite existing GH secrets
   [switch]$RotateSpCredential,     # rotate SP client secret & update AZURE_CREDENTIALS
+  [switch]$SetupOIDC,             # setup OIDC federated identity credentials (recommended)
   [string]$UserSecretsProject = "BookRecommender/backend/BookRecommenderApi/BookRecommenderApi.csproj"
 )
 
@@ -226,5 +227,84 @@ Set-Secret "AZURE_ACR_NAME" $AcrName
 Set-Secret "AZURE_WEBAPP_MI_PRINCIPAL_ID" $azurepid
 if ($OpenAiApiKey) { Set-Secret "OPENAI_API_KEY" $OpenAiApiKey }
 if ($SwaToken) { Set-Secret "AZURE_STATIC_WEB_APPS_API_TOKEN" $SwaToken } else { Write-Host "No SWA token set." }
+
+# OIDC Setup (recommended alternative to client secrets)
+if ($SetupOIDC) {
+  Write-Host "Setting up OIDC federated identity credentials..."
+  
+  # Get the app ID from the service principal
+  $appId = $null
+  if ($spJson) {
+    $spObj = $spJson | ConvertFrom-Json
+    $appId = $spObj.clientId
+  } else {
+    $appId = az ad sp list --display-name $SpName --query "[0].appId" -o tsv
+  }
+  
+  if (-not $appId -or $appId -eq "null") {
+    Write-Error "Could not find app ID for service principal '$SpName'. Create the SP first." 
+    exit 1
+  }
+  
+  # Setup federated credential for main branch workflows
+  Write-Host "Creating federated credential for main branch..."
+  $mainCredentialName = "github-main-$($Repo.Replace('/', '-'))"
+  $mainSubject = "repo:$Repo:ref:refs/heads/main"
+  
+  try {
+    $mainParams = ("{" +
+      "\"name\":\"$mainCredentialName\"," +
+      "\"issuer\":\"https://token.actions.githubusercontent.com\"," +
+      "\"subject\":\"$mainSubject\"," +
+      "\"description\":\"GitHub Actions main branch\"," +
+      "\"audiences\":[\"api://AzureADTokenExchange\"]" +
+      "}")
+    az ad app federated-credential create --id $appId --parameters $mainParams
+    Write-Host "✓ Main branch federated credential created"
+  } catch {
+    if ($_.Exception.Message -like "*already exists*") {
+      Write-Host "✓ Main branch federated credential already exists"
+    } else {
+      Write-Warning "Failed to create main branch federated credential: $_"
+    }
+  }
+  
+  Write-Host ""
+  Write-Host "OIDC Setup Complete! Your workflow can now authenticate without client secrets."
+  Write-Host "Make sure your workflow includes:"
+  Write-Host "  permissions:"
+  Write-Host "    id-token: write"
+  Write-Host "    contents: read"
+  Write-Host ""
+  Write-Host "And uses the azure/login action like:"
+  Write-Host "  - uses: azure/login@v2"
+  Write-Host "    with:"
+  Write-Host "      client-id: `${{ secrets.AZURE_CLIENT_ID }}"
+  Write-Host "      tenant-id: `${{ secrets.AZURE_TENANT_ID }}"
+  Write-Host "      subscription-id: `${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+  Write-Host ""
+}
+
+# Validation and debug output
+if ($Force) {
+  Write-Host ""
+  Write-Host "Validation - Secret lengths:"
+  
+  $secretValidation = @{
+    "AZURE_CLIENT_ID" = $(if ($spJson) { ($spJson | ConvertFrom-Json).clientId.Length } else { "N/A" })
+    "AZURE_TENANT_ID" = $(if ($spJson) { ($spJson | ConvertFrom-Json).tenantId.Length } else { "N/A" })
+    "AZURE_SUBSCRIPTION_ID" = $(if ($spJson) { ($spJson | ConvertFrom-Json).subscriptionId.Length } else { "N/A" })
+  }
+  
+  $secretValidation.GetEnumerator() | ForEach-Object {
+    Write-Host "  $($_.Key): $($_.Value) characters"
+  }
+  
+  Write-Host ""
+  Write-Host "If secrets still appear corrupted in GitHub Actions, try:"
+  Write-Host "1. Wait a few minutes for GitHub to propagate secret changes"
+  Write-Host "2. Use OIDC authentication (run with -SetupOIDC flag)"
+  Write-Host "3. Check that no special characters are causing encoding issues"
+}
 
 Write-Host "Done."
