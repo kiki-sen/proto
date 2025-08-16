@@ -20,36 +20,17 @@ env:
   DOCKERFILE: BookRecommender/backend/BookRecommenderApi/Dockerfile
   TAG: ${{ github.sha }}
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Debug tenant ID format
-      - name: Debug tenant ID
-        run: |
-          TENANT_ID="${{ secrets.AZURE_TENANT_ID }}"
-          echo "Tenant ID length: ${#TENANT_ID}"
-          echo "Tenant ID format: $(echo $TENANT_ID | sed 's/[0-9a-f]/X/g')"
-          if [[ $TENANT_ID =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-            echo "✓ Valid GUID format"
-          else
-            echo "✗ Invalid GUID format"
-            exit 1
-          fi
-
-      # Login to Azure using OIDC (recommended approach)
+      # Login to Azure using service principal with JSON credentials
       - name: Azure login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Debug ACR name
         id: acr_dbg
@@ -101,11 +82,12 @@ jobs:
           build-args: |
             PROJECT_PATH=backend/BookRecommenderApi
 
-      # Ensure the CLI is on the subscription from the login JSON
+      # Ensure the CLI is on the correct subscription context
       - name: Ensure correct subscription context
         run: |
           set -e
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          SUB_FROM_CREDS="$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId)"
+          az account set --subscription "$SUB_FROM_CREDS"
           az account show -o table
           
           # Wait a bit for RBAC propagation (in case permissions were just granted)
