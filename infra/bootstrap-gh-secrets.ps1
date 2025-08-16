@@ -38,17 +38,23 @@ if (-not $rgExists) { Write-Error "Resource group '$ResourceGroup' not found."; 
 
 # ACR detect
 if (-not $AcrName) {
-  $AcrName = az acr list -g $ResourceGroup --query "[0].name" -o tsv
-  if (-not $AcrName) { Write-Error "No ACR in RG. Pass -AcrName."; exit 1 }
+  $AcrName = az acr list -g $ResourceGroup --query "[0].name" -o tsv 2>$null
+  if (-not $AcrName -or $AcrName -eq "null" -or [string]::IsNullOrWhiteSpace($AcrName)) { 
+    Write-Error "No ACR found in resource group '$ResourceGroup'. Pass -AcrName explicitly."; exit 1 
+  }
+}
+# Validate ACR name format
+if ($AcrName -match '[^a-z0-9]' -or $AcrName.Length -lt 5 -or $AcrName.Length -gt 50) {
+  Write-Error "Invalid ACR name '$AcrName'. ACR names must be 5-50 lowercase alphanumeric characters only."; exit 1
 }
 Write-Host "ACR: $AcrName"
 
 # AZURE_WEBAPP_MI_PRINCIPAL_ID 
-if (-not $azurepid) {
-  $azurepid = az webapp show -n bookrec-api -g bookrec-rg --query identity.principalId -o tsv
-  if (-not $azurepid) { Write-Error "No pid found."; exit 1 }
+$azurepid = az webapp show -n $WebAppName -g $ResourceGroup --query identity.principalId -o tsv 2>$null
+if (-not $azurepid -or $azurepid -eq "null" -or [string]::IsNullOrWhiteSpace($azurepid)) { 
+  Write-Error "Could not get managed identity principal ID for Web App '$WebAppName' in RG '$ResourceGroup'. Make sure the Web App exists and has system-assigned managed identity enabled."; exit 1 
 }
-Write-Host "AZURE_WEBAPP_MI_PRINCIPAL_ID : $azurepid"
+Write-Host "AZURE_WEBAPP_MI_PRINCIPAL_ID: $azurepid"
 
 # SWA token (optional)
 $SwaToken = ""
@@ -145,7 +151,12 @@ if (-not $OpenAiApiKey -and (Get-Command dotnet -ErrorAction SilentlyContinue)) 
 }
 
 # Push secrets
-if ($spJson) { Set-Secret "AZURE_CREDENTIALS" $spJson }
+if ($spJson) { 
+  Set-Secret "AZURE_CREDENTIALS" $spJson 
+  # Also create base64 encoded version for workflows that need it
+  $spJsonB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($spJson))
+  Set-Secret "AZURE_CREDENTIALS_B64" $spJsonB64
+}
 Set-Secret "AZURE_RG" $ResourceGroup
 Set-Secret "AZURE_WEBAPP_NAME" $WebAppName
 Set-Secret "AZURE_ACR_NAME" $AcrName
