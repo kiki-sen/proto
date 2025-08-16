@@ -96,7 +96,8 @@ function Set-Secret($name, $value) {
     Write-Host "Setting secret: $name"
   }
   
-  $value | gh secret set $name -R $Repo --body -
+  # Use --body flag directly to avoid piping corruption
+  gh secret set $name -R $Repo --body $value
 }
 
 # Service principal / AZURE_CREDENTIALS
@@ -252,13 +253,15 @@ if ($SetupOIDC) {
   $mainSubject = "repo:$Repo:ref:refs/heads/main"
   
   try {
-    $mainParams = ("{" +
-      "\"name\":\"$mainCredentialName\"," +
-      "\"issuer\":\"https://token.actions.githubusercontent.com\"," +
-      "\"subject\":\"$mainSubject\"," +
-      "\"description\":\"GitHub Actions main branch\"," +
-      "\"audiences\":[\"api://AzureADTokenExchange\"]" +
-      "}")
+    # Create JSON using ConvertTo-Json to avoid escaping issues
+    $mainCredential = @{
+      name = $mainCredentialName
+      issuer = "https://token.actions.githubusercontent.com"
+      subject = $mainSubject
+      description = "GitHub Actions main branch"
+      audiences = @("api://AzureADTokenExchange")
+    }
+    $mainParams = ($mainCredential | ConvertTo-Json -Compress)
     az ad app federated-credential create --id $appId --parameters $mainParams
     Write-Host "✓ Main branch federated credential created"
   } catch {
