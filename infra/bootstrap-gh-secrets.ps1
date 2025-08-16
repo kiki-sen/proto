@@ -84,7 +84,17 @@ function Set-Secret($name, $value) {
   if (-not $Force -and $existing.ContainsKey($name)) {
     Write-Host "Skipping $name (already exists; use -Force to overwrite)"; return
   }
-  Write-Host "Setting secret: $name"
+  
+  # For critical OIDC secrets, delete and recreate to force refresh if using -Force
+  $criticalSecrets = @("AZURE_CLIENT_ID", "AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID")
+  if ($Force -and $criticalSecrets -contains $name -and $existing.ContainsKey($name)) {
+    Write-Host "Force refreshing secret: $name (delete + recreate)"
+    gh secret delete $name -R $Repo 2>$null
+    Start-Sleep 2
+  } else {
+    Write-Host "Setting secret: $name"
+  }
+  
   $value | gh secret set $name -R $Repo --body -
 }
 
