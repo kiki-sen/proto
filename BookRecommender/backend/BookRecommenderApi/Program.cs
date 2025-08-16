@@ -31,7 +31,22 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:4200") // Angular dev server
+        // Default allowed origins
+        var allowedOrigins = new List<string> { "http://localhost:4200" }; // Angular dev server
+        
+        // Add production origins from environment variables
+        var additionalOrigins = builder.Configuration["CORS:AllowedOrigins"];
+        if (!string.IsNullOrEmpty(additionalOrigins))
+        {
+            var origins = additionalOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                         .Select(o => o.Trim())
+                                         .Where(o => !string.IsNullOrEmpty(o));
+            allowedOrigins.AddRange(origins);
+        }
+        
+        Console.WriteLine($"CORS allowed origins: {string.Join(", ", allowedOrigins)}");
+        
+        policy.WithOrigins(allowedOrigins.ToArray())
               .AllowAnyHeader()
               .AllowAnyMethod();
     });

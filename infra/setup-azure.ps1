@@ -26,7 +26,14 @@ param(
   [string] $SkuName = "Standard_B1ms",
 
   [switch] $CreateStaticWebApp = $false,
-  [string] $StaticWebAppName = ""
+  [string] $StaticWebAppName = "",
+  
+  # GitHub integration parameters
+  [string] $GitHubRepo = "",              # format: "owner/repo"
+  [string] $ServicePrincipalName = "bookrec-sp",
+  [switch] $SetupOIDC = $false,
+  [switch] $Force = $false,
+  [string] $OpenAIApiKey = ""             # optional
 )
 
 # Avoid native stderr becoming terminating errors in WinPS5
@@ -237,6 +244,17 @@ if ($CreateStaticWebApp -and $StaticWebAppName) {
     Write-Host "   NOTE: In Azure Portal, copy the Deployment Token and save as GitHub Secret: AZURE_STATIC_WEB_APPS_API_TOKEN"
   } else {
     Write-Host ">> Static Web App '$StaticWebAppName' already exists. Skipping."
+  }
+  
+  # Configure CORS for the Static Web App
+  Write-Host ">> Configuring CORS for API to allow Static Web App..."
+  $swaHostname = az staticwebapp show -g $ResourceGroup -n $StaticWebAppName --query "defaultHostname" -o tsv 2>$null
+  if ($swaHostname -and $swaHostname -ne "null" -and -not [string]::IsNullOrWhiteSpace($swaHostname)) {
+    $corsOrigins = "https://$swaHostname"
+    Write-Host "   Setting CORS allowed origins: $corsOrigins"
+    az webapp config appsettings set -g $ResourceGroup -n $WebAppName --settings "CORS__AllowedOrigins=$corsOrigins" | Out-Null
+  } else {
+    Write-Warning "Could not get Static Web App hostname for CORS configuration"
   }
 }
 
