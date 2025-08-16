@@ -30,6 +30,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Debug tenant ID format
+      - name: Debug tenant ID
+        run: |
+          TENANT_ID="${{ secrets.AZURE_TENANT_ID }}"
+          echo "Tenant ID length: ${#TENANT_ID}"
+          echo "Tenant ID format: $(echo $TENANT_ID | sed 's/[0-9a-f]/X/g')"
+          if [[ $TENANT_ID =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "✓ Valid GUID format"
+          else
+            echo "✗ Invalid GUID format"
+            exit 1
+          fi
+
       # Login to Azure using OIDC (recommended approach)
       - name: Azure login
         uses: azure/login@v2
