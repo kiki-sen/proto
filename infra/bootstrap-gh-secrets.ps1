@@ -59,13 +59,34 @@ Write-Host "AZURE_WEBAPP_MI_PRINCIPAL_ID: $azurepid"
 
 # SWA token (optional)
 $SwaToken = ""
+if (-not $SwaName) {
+  # Auto-detect SWA in resource group
+  try {
+    az extension show -n staticwebapp *> $null
+  } catch { az extension add -n staticwebapp *> $null }
+  
+  $SwaName = az staticwebapp list -g $ResourceGroup --query "[0].name" -o tsv 2>$null
+  if ($SwaName -and $SwaName -ne "null" -and -not [string]::IsNullOrWhiteSpace($SwaName)) {
+    Write-Host "Auto-detected Static Web App: $SwaName"
+  }
+}
+
 if ($SwaName) {
+  Write-Host "Getting deployment token for Static Web App '$SwaName'..."
   try {
     az extension show -n staticwebapp *> $null
   } catch { az extension add -n staticwebapp *> $null }
   try {
     $SwaToken = az staticwebapp secrets list -n $SwaName -g $ResourceGroup --query "properties.apiKey" -o tsv
-  } catch { Write-Warning "Could not fetch SWA token automatically." }
+    if ($SwaToken -and $SwaToken -ne "null" -and -not [string]::IsNullOrWhiteSpace($SwaToken)) {
+      Write-Host "Successfully retrieved SWA deployment token (length: $($SwaToken.Length))"
+    } else {
+      Write-Warning "SWA deployment token is empty or null"
+      $SwaToken = ""
+    }
+  } catch { 
+    Write-Warning "Could not fetch SWA token automatically: $($_.Exception.Message)" 
+  }
 }
 
 # Helpers to check & set GH secrets without clobbering
