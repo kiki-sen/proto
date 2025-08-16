@@ -106,22 +106,23 @@ jobs:
           az account set --subscription "$SUB_FROM_CREDS"
           az account show -o table      
 
-      # Point Web App to image using new container-* flags
+      # Point Web App to image using higher-level CLI commands
       - name: Configure container image (MI)
         run: |
           set -e
 
-          SUB_ID="$(az account show --query id -o tsv)"
-          SITE_ID="/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.Web/sites/$WEBAPP_NAME"
-          CONFIG_URI="$SITE_ID/config/web?api-version=2022-09-01"
+          # A) Enable managed identity for ACR pull + set container image
+          az webapp config container set \
+            -g $RG \
+            -n $WEBAPP_NAME \
+            --container-image-name "${{ steps.acr_dbg.outputs.loginServer }}/${IMAGE_NAME}:${TAG}" \
+            --container-registry-url "https://${{ steps.acr_dbg.outputs.loginServer }}"
 
-          # A) enable MI for ACR pull
-          az rest --method PATCH --uri "$CONFIG_URI" \
-            --body '{"properties":{"acrUseManagedIdentityCreds":true}}'
-
-          # B) point to the container image
-          az rest --method PATCH --uri "$CONFIG_URI" \
-            --body "{\"properties\":{\"linuxFxVersion\":\"DOCKER|${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${TAG}\"}}"
+          # B) Enable managed identity credentials for ACR
+          az webapp config set \
+            -g $RG \
+            -n $WEBAPP_NAME \
+            --generic-configurations '{"acrUseManagedIdentityCreds": true}'
 
       - name: (Optional) Set OpenAI key as app setting
         if: ${{ env.OPENAI_API_KEY != '' }}
