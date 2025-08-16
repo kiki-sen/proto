@@ -26,16 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Step 1 — Decode AZURE_CREDENTIALS_B64 to creds.json
-      - name: Decode Azure credentials
-        run: echo "${{ secrets.AZURE_CREDENTIALS_B64 }}" | base64 --decode > $HOME/creds.json
-
-      # Step 2 — Read creds.json into an output variable
-      - name: Decode Azure credentials
+      # Step 1 — Use AZURE_CREDENTIALS directly (no base64 decoding needed)
+      - name: Set up Azure credentials
         id: read_creds
         run: |
           echo 'json<<EOF' >> "$GITHUB_OUTPUT"
-          echo "${{ secrets.AZURE_CREDENTIALS_B64 }}" | base64 --decode >> "$GITHUB_OUTPUT"
+          echo '${{ secrets.AZURE_CREDENTIALS }}' >> "$GITHUB_OUTPUT"
           echo 'EOF' >> "$GITHUB_OUTPUT"
 
       # - name: Debug AZURE_CREDENTIALS
