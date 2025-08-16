@@ -1,96 +1,111 @@
 <# 
-Re-setup Managed Identity pull from ACR for an Azure Web App (Linux container).
-Run in PowerShell on Windows. Re-entrant and safe to re-run.
+Bootstrap Managed Identity pull + CI permissions for an Azure Web App (Linux container).
+Run once locally before enabling CI.
 
-USAGE EXAMPLE:
-.\setup-mi-acr.ps1 -ResourceGroup "bookrec-rg" -WebAppName "bookrec-api" `
+Grants:
+- Web App's system-assigned MI -> AcrPull on ACR (for runtime pull)
+- CI Service Principal -> Contributor on Web App (so CI can set image:tag)
+- CI Service Principal -> AcrPush on ACR (so CI can push images)
+
+USAGE:
+.\infra\setup-managed-identity.ps1 `
+  -ResourceGroup "bookrec-rg" -WebAppName "bookrec-api" `
   -AcrName "bookrecacr1234" -ImageName "bookrecommenderapi" -Tag "latest" -Port 8080 `
+  -CiPrincipal "<appId-or-objectId-of-your-CI-SP>" `
   -OpenAiApiKey $env:OPENAI_API_KEY
+
+  To get CiPrincipal: az ad sp list --display-name github-deploy-proto --query "[0].appId" -o tsv
 #>
 
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory)] [string]$ResourceGroup,     # RG that contains the Web App
-  [Parameter(Mandatory)] [string]$WebAppName,        # e.g., bookrec-api
-  [Parameter(Mandatory)] [string]$AcrName,           # SHORT ACR name, e.g., bookrecacr1234
-  [Parameter(Mandatory)] [string]$ImageName,         # repo name in ACR, e.g., bookrecommenderapi
+  [Parameter(Mandatory)] [string]$ResourceGroup,
+  [Parameter(Mandatory)] [string]$WebAppName,
+  [Parameter(Mandatory)] [string]$AcrName,         # short name, e.g. myacr
+  [Parameter(Mandatory)] [string]$ImageName,       # ACR repo, e.g. bookrecommenderapi
   [string]$Tag = "latest",
-  [int]$Port = 8080,                                 # WEBSITES_PORT
-  [string]$OpenAiApiKey,                              # optional; sets OpenAI__ApiKey if provided
+  [int]$Port = 8080,
+  [string]$OpenAiApiKey,
+  [string]$CiPrincipal,                            # appId or objectId of CI SP (clientId from creds)
   [switch]$DryRun
 )
 
-# expose DryRun to helpers
 $script:DryRun = [bool]$DryRun
-
-function Do-Az {
-  param([Parameter(Mandatory)][string]$Cmd)
-  if ($script:DryRun) { Write-Host "DRYRUN> $Cmd" }
-  else { Invoke-Expression $Cmd | Out-Null }
+function Do-Az { param([Parameter(Mandatory)][string]$Cmd)
+  if ($script:DryRun) { Write-Host "DRYRUN> $Cmd" } else { Invoke-Expression $Cmd | Out-Null }
 }
-
 function Require-Command($cmd) {
-  if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-    throw "Missing required command: $cmd"
-  }
+  if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "Missing required command: $cmd" }
 }
 
 function Ensure-WebAppMI {
   param([string]$RG,[string]$Name)
-
   $type = az webapp show -g $RG -n $Name --query "identity.type" -o tsv 2>$null
   if ([string]::IsNullOrWhiteSpace($type) -or ($type -notmatch '^SystemAssigned')) {
     Do-Az "az webapp identity assign -g $RG -n $Name"
-  } else {
-    Write-Host "System-assigned identity already enabled on $Name."
-  }
-
+  } else { Write-Host "System-assigned identity already enabled on $Name." }
   $azurepid = az webapp show -g $RG -n $Name --query "identity.principalId" -o tsv 2>$null
-  if ([string]::IsNullOrWhiteSpace($pid)) {
-    if ($script:DryRun) {
-      Write-Warning "principalId unknown in DryRun (identity would be enabled)."
-      return ""
-    } else {
-      throw "Could not resolve principalId for $Name."
-    }
-  }
-
+  if ([string]::IsNullOrWhiteSpace($azurepid)) { throw "Could not resolve principalId for $Name." }
   Write-Host "Web App principalId: $azurepid"
   return $azurepid
 }
 
-function Get-AcrResourceGroup {
-  param([string]$Acr)
+function Get-AcrResourceGroup { param([string]$Acr)
   $rg = az acr show -n $Acr --query resourceGroup -o tsv
   if ([string]::IsNullOrWhiteSpace($rg)) { throw "ACR '$Acr' not found or no permission to read it." }
   return $rg
 }
 
-function Ensure-AcrPull {
+function Ensure-RoleOnScope {
   param(
-    [string]$PrincipalId,
-    [string]$Acr,            # short name, e.g. myacr
-    [string]$AcrRg,          # ACR's resource group
-    [string]$SubId
+    [Parameter(Mandatory)][string]$AssigneeObjectId,
+    [Parameter(Mandatory)][string]$RoleName,
+    [Parameter(Mandatory)][string]$Scope,
+    [string]$AssigneeType = "ServicePrincipal"
   )
-  if ([string]::IsNullOrWhiteSpace($PrincipalId)) {
-    throw "Ensure-AcrPull: PrincipalId is empty."
-  }
-
-  $scope = "/subscriptions/$SubId/resourceGroups/$AcrRg/providers/Microsoft.ContainerRegistry/registries/$Acr"
   $has = az role assignment list `
-          --assignee-object-id $PrincipalId `
-          --assignee-principal-type ServicePrincipal `
-          --scope $scope `
-          --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv 2>$null
+          --assignee-object-id $AssigneeObjectId `
+          --assignee-principal-type $AssigneeType `
+          --scope $Scope `
+          --query "[?roleDefinitionName=='$RoleName'] | length(@)" -o tsv 2>$null
+  if (($has -as [int]) -gt 0) { Write-Host "$RoleName already present on $Scope for $AssigneeObjectId."; return }
+  Do-Az "az role assignment create --assignee-object-id $AssigneeObjectId --assignee-principal-type $AssigneeType --role '$RoleName' --scope $Scope"
+}
 
-  if (($has -as [int]) -gt 0) {
-    Write-Host "AcrPull already present on $scope for $PrincipalId."
-    return $true
+function Ensure-AcrPull {
+  param([string]$PrincipalId,[string]$Acr,[string]$AcrRg,[string]$SubId)
+  if ([string]::IsNullOrWhiteSpace($PrincipalId)) { throw "Ensure-AcrPull: PrincipalId is empty." }
+  $scope = "/subscriptions/$SubId/resourceGroups/$AcrRg/providers/Microsoft.ContainerRegistry/registries/$Acr"
+  Ensure-RoleOnScope -AssigneeObjectId $PrincipalId -RoleName "AcrPull" -Scope $scope
+}
+
+function Resolve-ServicePrincipal {
+  param([Parameter(Mandatory)][string]$IdOrAppId)
+  # Try by objectId first, then appId
+  $sp = az ad sp show --id $IdOrAppId -o json 2>$null
+  if (-not $sp) { $sp = az ad sp list --filter "appId eq '$IdOrAppId'" -o json 2>$null | ConvertFrom-Json | Select-Object -First 1 | ConvertTo-Json -Depth 5 }
+  if (-not $sp) { throw "Could not resolve CI service principal by '$IdOrAppId'. Provide its appId (clientId) or objectId." }
+  $obj = $sp | ConvertFrom-Json
+  return @{ appId = $obj.appId; objectId = $obj.id }
+}
+
+function Ensure-CiPermissions {
+  param([string]$CiIdOrAppId,[string]$RG,[string]$Site,[string]$SubId,[string]$Acr,[string]$AcrRg)
+  if ([string]::IsNullOrWhiteSpace($CiIdOrAppId)) {
+    Write-Warning "CiPrincipal not provided - skipping CI role assignments."
+    return
   }
+  $sp = Resolve-ServicePrincipal -IdOrAppId $CiIdOrAppId
+  $ciObjId = $sp.objectId
 
-  Do-Az "az role assignment create --assignee-object-id $PrincipalId --assignee-principal-type ServicePrincipal --role AcrPull --scope $scope"
-  return $true
+  $siteScope = "/subscriptions/$SubId/resourceGroups/$RG/providers/Microsoft.Web/sites/$Site"
+  $acrScope  = "/subscriptions/$SubId/resourceGroups/$AcrRg/providers/Microsoft.ContainerRegistry/registries/$Acr"
+
+  # CI needs to configure the site container => Contributor on the site
+  Ensure-RoleOnScope -AssigneeObjectId $ciObjId -RoleName "Contributor" -Scope $siteScope
+
+  # CI needs to push to ACR => AcrPush on the registry
+  Ensure-RoleOnScope -AssigneeObjectId $ciObjId -RoleName "AcrPush" -Scope $acrScope
 }
 
 function Configure-WebAppContainerMI {
@@ -107,10 +122,25 @@ function Configure-WebAppContainerMI {
 
   $image = "$LoginServer/$($ImageRepo):$Tag"
   Write-Host "Set image -> $image"
-  Do-Az "az webapp config container set -g $RG -n $Name --docker-custom-image-name $image --docker-registry-server-url https://$LoginServer"
-  Do-Az "az webapp config set -g $RG -n $Name --acr-use-managed-identity true"
-  Do-Az "az webapp config appsettings set -g $RG -n $Name --settings WEBSITES_PORT=$Port"
 
+  # 1) Enable MI pulls first (site config) - use temp file for complex JSON
+  $tempFile = [System.IO.Path]::GetTempFileName()
+  try {
+    '{"acrUseManagedIdentityCreds": true}' | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
+    if ($script:DryRun) { 
+      Write-Host "DRYRUN> az webapp config set -g $RG -n $Name --generic-configurations @$tempFile"
+    } else {
+      & az webapp config set -g $RG -n $Name --generic-configurations "@$tempFile" | Out-Null
+    }
+  } finally {
+    if (Test-Path $tempFile) { Remove-Item $tempFile -Force }
+  }
+
+  # 2) Point to the image using new flags (no deprecated --docker-*)
+  Do-Az "az webapp config container set -g $RG -n $Name --container-image-name $image --container-registry-url https://$LoginServer"
+
+  # 3) Port + optional OpenAI key
+  Do-Az "az webapp config appsettings set -g $RG -n $Name --settings WEBSITES_PORT=$Port"
   if ($OpenAI) {
     Do-Az "az webapp config appsettings set -g $RG -n $Name --settings OpenAI__ApiKey=$OpenAI"
   }
@@ -120,27 +150,31 @@ function Configure-WebAppContainerMI {
 
 # ---- main ----
 Require-Command az
-
-# Confirm subscription context
 $subId = az account show --query id -o tsv
 if ([string]::IsNullOrWhiteSpace($subId)) { throw "Not logged in to Azure CLI. Run 'az login'." }
 Write-Host "Using subscription: $subId"
 
-# 1) Ensure MI and get principalId
-$azurepid = Ensure-WebAppMI -RG $ResourceGroup -Name $WebAppName
-Write-Host "Web App principalId: $azurepid"
+# Make sure provider is registered (safe to re-run)
+Do-Az "az provider register -n Microsoft.Web"
 
-# 2) Find ACR RG and ensure AcrPull on ACR scope
+# 1) Enable MI and get principalId of the Web App
+$webAppMiPrincipalId = Ensure-WebAppMI -RG $ResourceGroup -Name $WebAppName
+
+# 2) ACR RG + grant MI AcrPull (runtime)
 $acrRg = Get-AcrResourceGroup -Acr $AcrName
 Write-Host "ACR '$AcrName' is in RG: $acrRg"
-Ensure-AcrPull -PrincipalId $azurepid -Acr $AcrName -AcrRg $acrRg -SubId $subId
+Ensure-AcrPull -PrincipalId $webAppMiPrincipalId -Acr $AcrName -AcrRg $acrRg -SubId $subId
 
-# 3) (optional) tiny wait for RBAC propagation
+# 3) Grant CI the rights it needs (configure site + push image)
+Ensure-CiPermissions -CiIdOrAppId $CiPrincipal -RG $ResourceGroup -Site $WebAppName -SubId $subId -Acr $AcrName -AcrRg $acrRg
+
+# 4) Wait briefly for RBAC propagation
 Start-Sleep -Seconds 5
 
-# 4) Configure Web App to use MI with the ACR image
+# 5) Configure the Web App to use the ACR image via MI
 $loginServer = "$AcrName.azurecr.io"
 Configure-WebAppContainerMI -RG $ResourceGroup -Name $WebAppName -LoginServer $loginServer `
   -ImageRepo $ImageName -Tag $Tag -Port $Port -OpenAI $OpenAiApiKey
 
-Write-Host "Done. The Web App '$WebAppName' in RG '$ResourceGroup' is configured to pull from ACR '$AcrName' using Managed Identity."
+Write-Host 'Done. Bootstrapped MI pull + CI permissions. CI can now push to ACR and set image:tag; Web App will pull via MI.'
+

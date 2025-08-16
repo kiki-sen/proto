@@ -104,10 +104,7 @@ jobs:
           set -e
           SUB_FROM_CREDS="$(echo '${{ steps.read_creds.outputs.json }}' | jq -r .subscriptionId)"
           az account set --subscription "$SUB_FROM_CREDS"
-          az account show -o table
-
-      - name: Register Microsoft.Web provider
-        run: az provider register -n Microsoft.Web          
+          az account show -o table      
 
       # Point Web App to image using new container-* flags
       - name: Configure container image (MI)
