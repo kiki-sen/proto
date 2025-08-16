@@ -34,9 +34,9 @@ jobs:
       - name: Azure login
         uses: azure/login@v2
         with:
-          client-id: 9c7542ed-da86-4f5a-beb8-b4df942839ec
-          tenant-id: b0c8aded-3ec9-4c08-9bb8-cda5bda8bbc4
-          subscription-id: 55e0f899-1653-4f68-8e9c-4c2a07ab2499
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Debug ACR name
         id: acr_dbg
@@ -92,7 +92,7 @@ jobs:
       - name: Ensure correct subscription context
         run: |
           set -e
-          az account set --subscription "55e0f899-1653-4f68-8e9c-4c2a07ab2499"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           az account show -o table
           
           # Wait a bit for RBAC propagation (in case permissions were just granted)
