@@ -104,25 +104,25 @@ jobs:
           set -e
           SUB_FROM_CREDS="$(echo '${{ steps.read_creds.outputs.json }}' | jq -r .subscriptionId)"
           az account set --subscription "$SUB_FROM_CREDS"
-          az account show -o table      
+          az account show -o table
+          
+          # Wait a bit for RBAC propagation (in case permissions were just granted)
+          echo "Waiting 30 seconds for RBAC propagation..."
+          sleep 30
 
-      # Point Web App to image using higher-level CLI commands
+      # Point Web App to image using direct resource updates (avoids config read permissions)
       - name: Configure container image (MI)
         run: |
           set -e
 
-          # A) Enable managed identity for ACR pull + set container image
-          az webapp config container set \
-            -g $RG \
-            -n $WEBAPP_NAME \
-            --container-image-name "${{ steps.acr_dbg.outputs.loginServer }}/${IMAGE_NAME}:${TAG}" \
-            --container-registry-url "https://${{ steps.acr_dbg.outputs.loginServer }}"
-
-          # B) Enable managed identity credentials for ACR
-          az webapp config set \
-            -g $RG \
-            -n $WEBAPP_NAME \
-            --generic-configurations '{"acrUseManagedIdentityCreds": true}'
+          # Get the Web App resource ID
+          WEBAPP_ID=$(az webapp show -g $RG -n $WEBAPP_NAME --query id -o tsv)
+          
+          # A) Set container image and enable managed identity for ACR in one operation
+          az resource update --ids "$WEBAPP_ID" --set \
+            properties.siteConfig.linuxFxVersion="DOCKER|${{ steps.acr_dbg.outputs.loginServer }}/${IMAGE_NAME}:${TAG}" \
+            properties.siteConfig.acrUseManagedIdentityCreds=true \
+            properties.siteConfig.alwaysOn=true
 
       - name: (Optional) Set OpenAI key as app setting
         if: ${{ env.OPENAI_API_KEY != '' }}
