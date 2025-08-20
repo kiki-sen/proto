@@ -59,20 +59,9 @@ Console.WriteLine("Using connection string: " + builder.Configuration.GetConnect
 
 var app = builder.Build();
 
-// Apply migrations with error handling - but don't fail startup
-try 
-{
-    Console.WriteLine("Attempting to apply database migrations...");
-    ApplyMigrations(app);
-    Console.WriteLine("Database migrations completed successfully.");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Warning: Migration failed during startup: {ex.Message}");
-    Console.WriteLine($"Stack trace: {ex.StackTrace}");
-    Console.WriteLine("Application will continue to run. Use POST /admin/migrate to apply migrations manually.");
-    // Continue running - don't crash the app
-}
+// Startup migrations disabled - database schema is already set up
+// Database was bootstrapped manually due to DNS resolution issues in Azure App Service
+Console.WriteLine("Startup migrations disabled. Database schema is already applied.");
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
