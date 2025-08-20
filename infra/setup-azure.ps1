@@ -167,6 +167,18 @@ if ($pgExists) {
   } else {
     Write-Host ">> Firewall rule '$fwRuleName' already exists. Skipping."
   }
+  
+  # ---------- Create Database ----------
+  Write-Host ">> Checking if database '$PgDatabase' exists..."
+  $existingDbs = az postgres flexible-server db list -g $ResourceGroup -s $PgServerName --query "[].name" -o tsv 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $existingDbs) { $existingDbs = @() }
+  
+  if ($existingDbs -notcontains $PgDatabase) {
+    Write-Host ">> Creating database '$PgDatabase'..."
+    az postgres flexible-server db create -g $ResourceGroup -s $PgServerName -d $PgDatabase | Out-Null
+  } else {
+    Write-Host ">> Database '$PgDatabase' already exists. Skipping."
+  }
 } else {
   Write-Host ">> Postgres server not available; skipping DB + firewall this run."
 }
@@ -207,7 +219,9 @@ if (-not $principalId) {
 # ---------- Grant AcrPull on ACR ----------
 Write-Host ">> Granting AcrPull role on ACR to Web App identity..."
 $acrId = az acr show -g $ResourceGroup -n $AcrName --query id -o tsv
-try { az role assignment create --assignee $principalId --role "AcrPull" --scope $acrId | Out-Null } catch {}
+Retry-Command {
+  az role assignment create --assignee $principalId --role "AcrPull" --scope $acrId | Out-Null
+}
 
 # ---------- App settings on Web App ----------
 $pgHost = "$PgServerName.postgres.database.azure.com"
@@ -251,8 +265,12 @@ if ($CreateStaticWebApp -and $StaticWebAppName) {
   $swaHostname = az staticwebapp show -g $ResourceGroup -n $StaticWebAppName --query "defaultHostname" -o tsv 2>$null
   if ($swaHostname -and $swaHostname -ne "null" -and -not [string]::IsNullOrWhiteSpace($swaHostname)) {
     $corsOrigins = "https://$swaHostname"
-    Write-Host "   Setting CORS allowed origins: $corsOrigins"
+    Write-Host "   Setting CORS allowed origins (app-level): $corsOrigins"
     az webapp config appsettings set -g $ResourceGroup -n $WebAppName --settings "CORS__AllowedOrigins=$corsOrigins" | Out-Null
+    
+    # Also set Azure-level CORS (more reliable)
+    Write-Host "   Setting CORS allowed origins (Azure-level): $corsOrigins"
+    az webapp cors add -g $ResourceGroup -n $WebAppName --allowed-origins $corsOrigins | Out-Null
   } else {
     Write-Warning "Could not get Static Web App hostname for CORS configuration"
   }

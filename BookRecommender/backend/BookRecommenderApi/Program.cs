@@ -59,9 +59,20 @@ Console.WriteLine("Using connection string: " + builder.Configuration.GetConnect
 
 var app = builder.Build();
 
-// Migrations are disabled during startup to avoid segfaults
-// Use POST /admin/migrate to run migrations manually after startup
-Console.WriteLine("Startup migrations disabled. Use POST /admin/migrate to bootstrap database.");
+// Apply migrations with error handling - but don't fail startup
+try 
+{
+    Console.WriteLine("Attempting to apply database migrations...");
+    ApplyMigrations(app);
+    Console.WriteLine("Database migrations completed successfully.");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Warning: Migration failed during startup: {ex.Message}");
+    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    Console.WriteLine("Application will continue to run. Use POST /admin/migrate to apply migrations manually.");
+    // Continue running - don't crash the app
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
