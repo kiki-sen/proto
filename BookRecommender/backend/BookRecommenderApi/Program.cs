@@ -59,7 +59,17 @@ Console.WriteLine("Using connection string: " + builder.Configuration.GetConnect
 
 var app = builder.Build();
 
-ApplyMigrations(app);
+// Apply migrations with better error handling
+try 
+{
+    ApplyMigrations(app);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Migration failed: {ex.Message}");
+    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    Console.WriteLine("Continuing without migrations - they can be applied later manually.");
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -83,6 +93,30 @@ app.MapPost("/users", async (BookDbContext db, User user) =>
 
 app.MapGet("/books", async (BookDbContext db) =>
     await db.Books.ToListAsync());
+
+// Manual migration endpoint for bootstrapping
+app.MapPost("/admin/migrate", async (BookDbContext db) =>
+{
+    try
+    {
+        var pending = await db.Database.GetPendingMigrationsAsync();
+        if (pending.Any())
+        {
+            Console.WriteLine($"Applying {pending.Count()} pending migrations...");
+            await db.Database.MigrateAsync();
+            return Results.Ok(new { message = "Migrations applied successfully", count = pending.Count() });
+        }
+        else
+        {
+            return Results.Ok(new { message = "Database is up-to-date. No migrations needed." });
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Migration failed: {ex.Message}");
+        return Results.Problem($"Migration failed: {ex.Message}");
+    }
+});
 
 app.MapPost("/books", async (BookDbContext db, Book book) =>
 {
