@@ -130,10 +130,6 @@ jobs:
           set -e
           az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           az account show -o table
-          
-          # Wait a bit for RBAC propagation (in case permissions were just granted)
-          echo "Waiting 30 seconds for RBAC propagation..."
-          sleep 30
 
       # Point Web App to image using direct resource updates (avoids config read permissions)
       - name: Configure container image (MI)

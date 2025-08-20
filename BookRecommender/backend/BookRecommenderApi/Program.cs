@@ -59,24 +59,24 @@ Console.WriteLine("Using connection string: " + builder.Configuration.GetConnect
 
 var app = builder.Build();
 
-// Re-enabling startup migrations with detailed error handling to diagnose connection issue
-try 
-{
-    Console.WriteLine("Testing database connection and applying any pending migrations...");
-    ApplyMigrations(app);
-    Console.WriteLine("Database connection and migrations successful.");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Database connection failed: {ex.GetType().Name}: {ex.Message}");
-    if (ex.InnerException != null)
-    {
-        Console.WriteLine($"Inner exception: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
-    }
-    Console.WriteLine($"Stack trace: {ex.StackTrace}");
-    Console.WriteLine("Application will continue to run despite database connection failure.");
-    // Continue running - don't crash the app
-}
+// Startup migrations disabled - use /admin/migrate endpoint instead
+// try 
+// {
+//     Console.WriteLine("Testing database connection and applying any pending migrations...");
+//     ApplyMigrations(app);
+//     Console.WriteLine("Database connection and migrations successful.");
+// }
+// catch (Exception ex)
+// {
+//     Console.WriteLine($"Database connection failed: {ex.GetType().Name}: {ex.Message}");
+//     if (ex.InnerException != null)
+//     {
+//         Console.WriteLine($"Inner exception: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+//     }
+//     Console.WriteLine($"Stack trace: {ex.StackTrace}");
+//     Console.WriteLine("Application will continue to run despite database connection failure.");
+//     // Continue running - don't crash the app
+// }
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
