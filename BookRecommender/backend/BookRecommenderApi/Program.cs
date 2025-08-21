@@ -103,6 +103,48 @@ app.MapGet("/health", () => new {
     version = "1.0.0"
 });
 
+// Raw database connection test bypassing EF
+app.MapGet("/debug/raw-db-test", async (IConfiguration config, ILogger<Program> logger) =>
+{
+    try
+    {
+        logger.LogInformation("[RAW-DB] Starting raw database connection test...");
+        
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        logger.LogInformation($"[RAW-DB] Connection string length: {connectionString?.Length ?? 0}");
+        
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            logger.LogError("[RAW-DB] Connection string is null or empty!");
+            return Results.Problem("Connection string not found");
+        }
+        
+        // Test raw PostgreSQL connection
+        using var conn = new Npgsql.NpgsqlConnection(connectionString);
+        logger.LogInformation("[RAW-DB] Opening connection...");
+        await conn.OpenAsync();
+        logger.LogInformation("[RAW-DB] Connection opened successfully");
+        
+        // Test simple query
+        using var cmd = new Npgsql.NpgsqlCommand("SELECT version()", conn);
+        logger.LogInformation("[RAW-DB] Executing query...");
+        var result = await cmd.ExecuteScalarAsync();
+        logger.LogInformation($"[RAW-DB] Query result: {result?.ToString()?.Substring(0, Math.Min(100, result.ToString()?.Length ?? 0))}");
+        
+        return Results.Ok(new { 
+            status = "success", 
+            connectionStringLength = connectionString.Length,
+            postgresVersion = result?.ToString(),
+            message = "Raw database connection works!" 
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[RAW-DB] Raw database test failed");
+        return Results.Problem($"Raw database test failed: {ex.GetType().Name}: {ex.Message}");
+    }
+});
+
 // Database test endpoint with comprehensive error handling
 app.MapGet("/debug/db-test", async (BookDbContext db, ILogger<Program> logger) =>
 {
