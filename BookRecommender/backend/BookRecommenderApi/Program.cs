@@ -110,28 +110,73 @@ app.MapGet("/books", async (BookDbContext db) =>
     await db.Books.ToListAsync());
 
 // Manual migration endpoint for bootstrapping
-app.MapPost("/admin/migrate", async (BookDbContext db) =>
+app.MapPost("/admin/migrate", async (BookDbContext db, IConfiguration config) =>
 {
     try
     {
-        var pending = await db.Database.GetPendingMigrationsAsync();
-        if (pending.Any())
+        Console.WriteLine("Starting migration process...");
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        Console.WriteLine($"Using connection string: {connectionString?.Replace(GetPassword(connectionString ?? ""), "***")}");
+        
+        // Test database connection first
+        Console.WriteLine("Testing database connection...");
+        var canConnect = await db.Database.CanConnectAsync();
+        Console.WriteLine($"Database connection test: {(canConnect ? "SUCCESS" : "FAILED")}");
+        
+        if (!canConnect)
         {
-            Console.WriteLine($"Applying {pending.Count()} pending migrations...");
+            return Results.Problem("Cannot connect to database. Check connection string and network access.");
+        }
+        
+        Console.WriteLine("Checking for pending migrations...");
+        var pending = await db.Database.GetPendingMigrationsAsync();
+        var pendingList = pending.ToList();
+        
+        Console.WriteLine($"Found {pendingList.Count} pending migrations:");
+        foreach (var migration in pendingList)
+        {
+            Console.WriteLine($"  - {migration}");
+        }
+        
+        if (pendingList.Any())
+        {
+            Console.WriteLine($"Applying {pendingList.Count} pending migrations...");
             await db.Database.MigrateAsync();
-            return Results.Ok(new { message = "Migrations applied successfully", count = pending.Count() });
+            Console.WriteLine("Migrations applied successfully!");
+            return Results.Ok(new { message = "Migrations applied successfully", count = pendingList.Count, migrations = pendingList });
         }
         else
         {
+            Console.WriteLine("Database is up-to-date. No migrations needed.");
             return Results.Ok(new { message = "Database is up-to-date. No migrations needed." });
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Migration failed: {ex.Message}");
+        Console.WriteLine($"Migration failed: {ex.GetType().Name}: {ex.Message}");
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"Inner exception: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+        }
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
         return Results.Problem($"Migration failed: {ex.Message}");
     }
 });
+
+// Helper method for masking passwords in connection strings
+static string GetPassword(string connectionString)
+{
+    if (string.IsNullOrEmpty(connectionString)) return "";
+    var parts = connectionString.Split(';');
+    foreach (var part in parts)
+    {
+        if (part.Trim().StartsWith("Password=", StringComparison.OrdinalIgnoreCase))
+        {
+            return part.Trim().Substring("Password=".Length);
+        }
+    }
+    return "password";
+}
 
 app.MapPost("/books", async (BookDbContext db, Book book) =>
 {
