@@ -191,6 +191,67 @@ app.MapGet("/debug/simple-db", (IConfiguration config, ILogger<Program> logger) 
     }
 });
 
+// Manual users endpoint that bypasses DI completely
+app.MapGet("/debug/manual-users", async (HttpContext context) =>
+{
+    try
+    {
+        Console.WriteLine("[MANUAL-USERS] Starting manual users test...");
+        
+        // Get configuration manually
+        var config = context.RequestServices.GetRequiredService<IConfiguration>();
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        
+        Console.WriteLine($"[MANUAL-USERS] Connection string length: {connectionString?.Length ?? 0}");
+        
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            Console.WriteLine("[MANUAL-USERS] Connection string is null or empty!");
+            await context.Response.WriteAsJsonAsync(new { error = "Connection string not found" });
+            return;
+        }
+        
+        // Create DbContext manually
+        var optionsBuilder = new DbContextOptionsBuilder<BookDbContext>();
+        optionsBuilder.UseNpgsql(connectionString);
+        
+        Console.WriteLine("[MANUAL-USERS] Creating DbContext...");
+        using var dbContext = new BookDbContext(optionsBuilder.Options);
+        
+        Console.WriteLine("[MANUAL-USERS] Testing database connection...");
+        var canConnect = await dbContext.Database.CanConnectAsync();
+        Console.WriteLine($"[MANUAL-USERS] Can connect: {canConnect}");
+        
+        if (!canConnect)
+        {
+            Console.WriteLine("[MANUAL-USERS] Cannot connect to database");
+            context.Response.StatusCode = 500;
+            await context.Response.WriteAsJsonAsync(new { error = "Cannot connect to database" });
+            return;
+        }
+        
+        Console.WriteLine("[MANUAL-USERS] Getting users...");
+        var users = await dbContext.Users.ToListAsync();
+        Console.WriteLine($"[MANUAL-USERS] Found {users.Count} users");
+        
+        await context.Response.WriteAsJsonAsync(new { status = "success", userCount = users.Count, users = users });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[MANUAL-USERS] Failed: {ex.GetType().Name}: {ex.Message}");
+        Console.WriteLine($"[MANUAL-USERS] Inner: {ex.InnerException?.Message}");
+        Console.WriteLine($"[MANUAL-USERS] Stack: {ex.StackTrace}");
+        
+        context.Response.StatusCode = 500;
+        await context.Response.WriteAsJsonAsync(new { 
+            error = ex.GetType().Name, 
+            message = ex.Message,
+            innerMessage = ex.InnerException?.Message,
+            stack = ex.StackTrace
+        });
+    }
+});
+
 // Raw database connection test using Entity Framework
 app.MapGet("/debug/raw-db-test", async (IConfiguration config, ILogger<Program> logger, IServiceProvider services) =>
 {

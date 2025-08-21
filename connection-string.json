@@ -1,0 +1,8 @@
+[
+  {
+    "name": "DefaultConnection",
+    "value": "Host=bookrecpg1234.postgres.database.azure.com;Database=bookdb;Username=bookuser;Password=SuperS3cure!123;SslMode=Require;TrustServerCertificate=true",
+    "type": "PostgreSQL",
+    "slotSetting": false
+  }
+]
