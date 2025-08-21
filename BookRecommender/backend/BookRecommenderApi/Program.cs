@@ -144,6 +144,53 @@ app.MapGet("/debug/config", (IConfiguration config, ILogger<Program> logger) =>
     }
 });
 
+// Simple DbContext creation test
+app.MapGet("/debug/simple-db", (IConfiguration config, ILogger<Program> logger) =>
+{
+    try
+    {
+        logger.LogInformation("[SIMPLE-DB] Testing DbContext creation...");
+        Console.WriteLine("[SIMPLE-DB] Testing DbContext creation...");
+        
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        logger.LogInformation($"[SIMPLE-DB] Connection string length: {connectionString?.Length ?? 0}");
+        Console.WriteLine($"[SIMPLE-DB] Connection string length: {connectionString?.Length ?? 0}");
+        
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            logger.LogError("[SIMPLE-DB] Connection string is null or empty!");
+            Console.WriteLine("[SIMPLE-DB] Connection string is null or empty!");
+            return Results.Problem("Connection string not found");
+        }
+        
+        // Just try to create DbContextOptions - don't actually connect
+        var optionsBuilder = new DbContextOptionsBuilder<BookDbContext>();
+        logger.LogInformation("[SIMPLE-DB] Created options builder");
+        Console.WriteLine("[SIMPLE-DB] Created options builder");
+        
+        optionsBuilder.UseNpgsql(connectionString);
+        logger.LogInformation("[SIMPLE-DB] Configured Npgsql options");
+        Console.WriteLine("[SIMPLE-DB] Configured Npgsql options");
+        
+        var options = optionsBuilder.Options;
+        logger.LogInformation("[SIMPLE-DB] Got options");
+        Console.WriteLine("[SIMPLE-DB] Got options");
+        
+        return Results.Ok(new { 
+            status = "success", 
+            connectionStringLength = connectionString.Length,
+            message = "DbContext options created successfully!" 
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[SIMPLE-DB] Simple database test failed");
+        Console.WriteLine($"[SIMPLE-DB] Simple database test failed: {ex.GetType().Name}: {ex.Message}");
+        Console.WriteLine($"[SIMPLE-DB] Stack trace: {ex.StackTrace}");
+        return Results.Problem($"Simple database test failed: {ex.GetType().Name}: {ex.Message}");
+    }
+});
+
 // Raw database connection test using Entity Framework
 app.MapGet("/debug/raw-db-test", async (IConfiguration config, ILogger<Program> logger, IServiceProvider services) =>
 {
