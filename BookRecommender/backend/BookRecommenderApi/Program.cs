@@ -88,6 +88,14 @@ app.UseCors();
 
 app.MapControllers();
 
+// Health check endpoint - no database required
+app.MapGet("/health", () => new { 
+    status = "healthy", 
+    timestamp = DateTime.UtcNow,
+    environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "unknown",
+    version = "1.0.0"
+});
+
 app.MapGet("/users", async (BookDbContext db) =>
     await db.Users.ToListAsync());
 
