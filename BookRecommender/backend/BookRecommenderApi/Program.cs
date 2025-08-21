@@ -59,8 +59,24 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Configure DbContext with Azure-friendly options
 builder.Services.AddDbContext<BookDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        // Azure-specific configurations
+        npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(30), errorCodesToAdd: null);
+        npgsqlOptions.CommandTimeout(30);
+    });
+    
+    // Disable sensitive data logging in production
+    if (!builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging(false);
+        options.EnableDetailedErrors(false);
+    }
+});
 
 Console.WriteLine("Using connection string: " + builder.Configuration.GetConnectionString("DefaultConnection"));
 
