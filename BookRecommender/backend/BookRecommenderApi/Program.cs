@@ -103,6 +103,47 @@ app.MapGet("/health", () => new {
     version = "1.0.0"
 });
 
+// Configuration debugging endpoint
+app.MapGet("/debug/config", (IConfiguration config, ILogger<Program> logger) =>
+{
+    try
+    {
+        logger.LogInformation("[CONFIG] Getting configuration debug info...");
+        
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        var environment = config["ASPNETCORE_ENVIRONMENT"];
+        var dockerEnv = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+        
+        // Check various ways the connection string might be stored
+        var connStringDirect = config["ConnectionStrings:DefaultConnection"];
+        var connStringEnv = Environment.GetEnvironmentVariable("SQLAZURECONNSTR_DefaultConnection");
+        var connStringCustom = Environment.GetEnvironmentVariable("DefaultConnection");
+        
+        logger.LogInformation($"[CONFIG] Connection string length: {connectionString?.Length ?? 0}");
+        logger.LogInformation($"[CONFIG] Environment: {environment}");
+        
+        return Results.Ok(new {
+            environment = environment,
+            isDocker = dockerEnv,
+            connectionString = new {
+                fromConfig = connectionString?.Length ?? 0,
+                fromConfigDirect = connStringDirect?.Length ?? 0,
+                fromSqlAzureEnv = connStringEnv?.Length ?? 0,
+                fromCustomEnv = connStringCustom?.Length ?? 0,
+                hasValue = !string.IsNullOrEmpty(connectionString)
+            },
+            configSources = config.AsEnumerable().Where(kvp => kvp.Key.Contains("Connection") || kvp.Key.Contains("SQLAZURE"))
+                                                .Select(kvp => new { key = kvp.Key, hasValue = !string.IsNullOrEmpty(kvp.Value) })
+                                                .ToList()
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[CONFIG] Configuration debug failed");
+        return Results.Problem($"Config debug failed: {ex.Message}");
+    }
+});
+
 // Raw database connection test bypassing EF
 app.MapGet("/debug/raw-db-test", async (IConfiguration config, ILogger<Program> logger) =>
 {
