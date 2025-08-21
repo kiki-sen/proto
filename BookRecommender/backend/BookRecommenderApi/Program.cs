@@ -8,14 +8,7 @@ using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure logging to ensure console output appears in Azure
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.AddAzureWebAppDiagnostics();
-builder.Logging.SetMinimumLevel(LogLevel.Information);
-
 bool isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
-Console.WriteLine($"[STARTUP] Application starting. Docker: {isDocker}");
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false)
@@ -66,24 +59,17 @@ Console.WriteLine("Using connection string: " + builder.Configuration.GetConnect
 
 var app = builder.Build();
 
-// Startup migrations disabled - use /admin/migrate endpoint instead
-// try 
-// {
-//     Console.WriteLine("Testing database connection and applying any pending migrations...");
-//     ApplyMigrations(app);
-//     Console.WriteLine("Database connection and migrations successful.");
-// }
-// catch (Exception ex)
-// {
-//     Console.WriteLine($"Database connection failed: {ex.GetType().Name}: {ex.Message}");
-//     if (ex.InnerException != null)
-//     {
-//         Console.WriteLine($"Inner exception: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
-//     }
-//     Console.WriteLine($"Stack trace: {ex.StackTrace}");
-//     Console.WriteLine("Application will continue to run despite database connection failure.");
-//     // Continue running - don't crash the app
-// }
+// Apply migrations with better error handling
+try 
+{
+    ApplyMigrations(app);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Migration failed: {ex.Message}");
+    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    Console.WriteLine("Continuing without migrations - they can be applied later manually.");
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -344,54 +330,18 @@ app.MapGet("/debug/db-test", async (BookDbContext db, ILogger<Program> logger) =
     }
 });
 
-app.MapGet("/users", async (BookDbContext db, ILogger<Program> logger) =>
+app.MapGet("/users", async (BookDbContext db) =>
+    await db.Users.ToListAsync());
+
+app.MapPost("/users", async (BookDbContext db, User user) =>
 {
-    try
-    {
-        logger.LogInformation("[USERS] Getting all users...");
-        var users = await db.Users.ToListAsync();
-        logger.LogInformation($"[USERS] Found {users.Count} users");
-        return Results.Ok(users);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "[USERS] Failed to get users");
-        return Results.Problem($"Failed to get users: {ex.Message}");
-    }
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+    return Results.Created($"/users/{user.Id}", user);
 });
 
-app.MapPost("/users", async (BookDbContext db, User user, ILogger<Program> logger) =>
-{
-    try
-    {
-        logger.LogInformation($"[USERS] Creating user: {user.Name}");
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-        logger.LogInformation($"[USERS] User created with ID: {user.Id}");
-        return Results.Created($"/users/{user.Id}", user);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "[USERS] Failed to create user");
-        return Results.Problem($"Failed to create user: {ex.Message}");
-    }
-});
-
-app.MapGet("/books", async (BookDbContext db, ILogger<Program> logger) =>
-{
-    try
-    {
-        logger.LogInformation("[BOOKS] Getting all books...");
-        var books = await db.Books.ToListAsync();
-        logger.LogInformation($"[BOOKS] Found {books.Count} books");
-        return Results.Ok(books);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "[BOOKS] Failed to get books");
-        return Results.Problem($"Failed to get books: {ex.Message}");
-    }
-});
+app.MapGet("/books", async (BookDbContext db) =>
+    await db.Books.ToListAsync());
 
 // Manual migration endpoint for bootstrapping
 app.MapPost("/admin/migrate", async (BookDbContext db, IConfiguration config) =>
