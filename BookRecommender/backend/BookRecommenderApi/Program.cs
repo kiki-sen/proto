@@ -8,7 +8,14 @@ using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure logging to ensure console output appears in Azure
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddAzureWebAppDiagnostics();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
+
 bool isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+Console.WriteLine($"[STARTUP] Application starting. Docker: {isDocker}");
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false)
@@ -96,18 +103,83 @@ app.MapGet("/health", () => new {
     version = "1.0.0"
 });
 
-app.MapGet("/users", async (BookDbContext db) =>
-    await db.Users.ToListAsync());
-
-app.MapPost("/users", async (BookDbContext db, User user) =>
+// Database test endpoint with comprehensive error handling
+app.MapGet("/debug/db-test", async (BookDbContext db, ILogger<Program> logger) =>
 {
-    db.Users.Add(user);
-    await db.SaveChangesAsync();
-    return Results.Created($"/users/{user.Id}", user);
+    try
+    {
+        logger.LogInformation("[DB-TEST] Starting database test...");
+        
+        // Test connection
+        var canConnect = await db.Database.CanConnectAsync();
+        logger.LogInformation($"[DB-TEST] Can connect: {canConnect}");
+        
+        if (!canConnect)
+        {
+            return Results.Problem("Cannot connect to database");
+        }
+        
+        // Test simple query
+        var userCount = await db.Users.CountAsync();
+        logger.LogInformation($"[DB-TEST] User count: {userCount}");
+        
+        return Results.Ok(new { status = "success", canConnect, userCount, message = "Database is working" });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[DB-TEST] Database test failed");
+        return Results.Problem($"Database test failed: {ex.Message}");
+    }
 });
 
-app.MapGet("/books", async (BookDbContext db) =>
-    await db.Books.ToListAsync());
+app.MapGet("/users", async (BookDbContext db, ILogger<Program> logger) =>
+{
+    try
+    {
+        logger.LogInformation("[USERS] Getting all users...");
+        var users = await db.Users.ToListAsync();
+        logger.LogInformation($"[USERS] Found {users.Count} users");
+        return Results.Ok(users);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[USERS] Failed to get users");
+        return Results.Problem($"Failed to get users: {ex.Message}");
+    }
+});
+
+app.MapPost("/users", async (BookDbContext db, User user, ILogger<Program> logger) =>
+{
+    try
+    {
+        logger.LogInformation($"[USERS] Creating user: {user.Name}");
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        logger.LogInformation($"[USERS] User created with ID: {user.Id}");
+        return Results.Created($"/users/{user.Id}", user);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[USERS] Failed to create user");
+        return Results.Problem($"Failed to create user: {ex.Message}");
+    }
+});
+
+app.MapGet("/books", async (BookDbContext db, ILogger<Program> logger) =>
+{
+    try
+    {
+        logger.LogInformation("[BOOKS] Getting all books...");
+        var books = await db.Books.ToListAsync();
+        logger.LogInformation($"[BOOKS] Found {books.Count} books");
+        return Results.Ok(books);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[BOOKS] Failed to get books");
+        return Results.Problem($"Failed to get books: {ex.Message}");
+    }
+});
 
 // Manual migration endpoint for bootstrapping
 app.MapPost("/admin/migrate", async (BookDbContext db, IConfiguration config) =>
