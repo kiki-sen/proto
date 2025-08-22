@@ -1,0 +1,149 @@
+# Azure Infrastructure Setup Script for BookRecommender UI
+param(
+    [string]$SubscriptionId = "",
+    [string]$ResourceGroupName = "rg-bookrecommender-proto",
+    [string]$Location = "East US",
+    [string]$ManagedIdentityName = "id-bookrecommender-github",
+    [string]$GitHubRepo = "kiki-sen/proto"
+)
+
+$ErrorActionPreference = "Stop"
+
+Write-Host "[STEP] Checking Azure CLI installation..." -ForegroundColor Blue
+try {
+    $azVersion = az version 2>$null | ConvertFrom-Json
+    Write-Host "[SUCCESS] Azure CLI version: $($azVersion.'azure-cli')" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Azure CLI is not installed. Please install it first." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "[STEP] Checking Azure CLI authentication..." -ForegroundColor Blue
+try {
+    $account = az account show 2>$null | ConvertFrom-Json
+    Write-Host "[SUCCESS] Logged in as: $($account.user.name)" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Please run 'az login' first" -ForegroundColor Red
+    exit 1
+}
+
+if ([string]::IsNullOrEmpty($SubscriptionId)) {
+    $SubscriptionId = az account show --query id -o tsv
+    Write-Host "[SUCCESS] Using subscription: $SubscriptionId" -ForegroundColor Green
+}
+
+Write-Host "[STEP] Setting subscription context..." -ForegroundColor Blue
+az account set --subscription $SubscriptionId
+
+Write-Host "[STEP] Creating Resource Group: $ResourceGroupName" -ForegroundColor Blue
+try {
+    $existingRg = az group show --name $ResourceGroupName 2>$null | ConvertFrom-Json
+    Write-Host "[SUCCESS] Resource Group already exists" -ForegroundColor Green
+} catch {
+    az group create --name $ResourceGroupName --location $Location --output table
+    Write-Host "[SUCCESS] Resource Group created successfully" -ForegroundColor Green
+}
+
+Write-Host "[STEP] Creating Managed Identity: $ManagedIdentityName" -ForegroundColor Blue
+try {
+    $managedIdentityResult = az identity show --name $ManagedIdentityName --resource-group $ResourceGroupName --output json | ConvertFrom-Json
+    Write-Host "[SUCCESS] Managed Identity already exists" -ForegroundColor Green
+} catch {
+    $managedIdentityResult = az identity create --name $ManagedIdentityName --resource-group $ResourceGroupName --output json | ConvertFrom-Json
+    Write-Host "[SUCCESS] Managed Identity created successfully" -ForegroundColor Green
+}
+
+$ClientId = $managedIdentityResult.clientId
+$PrincipalId = $managedIdentityResult.principalId
+
+Write-Host "[SUCCESS] Client ID: $ClientId" -ForegroundColor Green
+
+Write-Host "[STEP] Assigning Contributor role to Managed Identity for Resource Group" -ForegroundColor Blue
+$rgScope = az group show --name $ResourceGroupName --query id -o tsv
+try {
+    $existingAssignment = az role assignment list --assignee $PrincipalId --scope $rgScope --role "Contributor" 2>$null | ConvertFrom-Json
+    if ($existingAssignment.Count -gt 0) {
+        Write-Host "[SUCCESS] Contributor role already assigned to Resource Group" -ForegroundColor Green
+    } else {
+        az role assignment create --assignee $PrincipalId --role "Contributor" --scope $rgScope
+        Write-Host "[SUCCESS] Contributor role assigned to Resource Group" -ForegroundColor Green
+    }
+} catch {
+    az role assignment create --assignee $PrincipalId --role "Contributor" --scope $rgScope
+    Write-Host "[SUCCESS] Contributor role assigned to Resource Group" -ForegroundColor Green
+}
+
+Write-Host "[STEP] Setting up GitHub OIDC federation" -ForegroundColor Blue
+
+# Create main branch credential
+try {
+    $existingMainCred = az identity federated-credential show --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName 2>$null | ConvertFrom-Json
+    Write-Host "[SUCCESS] GitHub main branch credential already exists" -ForegroundColor Green
+} catch {
+    az identity federated-credential create --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "repo:$GitHubRepo:ref:refs/heads/main" --audience "api://AzureADTokenExchange"
+    Write-Host "[SUCCESS] GitHub main branch credential created" -ForegroundColor Green
+}
+
+# Create PR credential
+try {
+    $existingPrCred = az identity federated-credential show --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName 2>$null | ConvertFrom-Json
+    Write-Host "[SUCCESS] GitHub PR credential already exists" -ForegroundColor Green
+} catch {
+    az identity federated-credential create --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "repo:$GitHubRepo:pull_request" --audience "api://AzureADTokenExchange"
+    Write-Host "[SUCCESS] GitHub PR credential created" -ForegroundColor Green
+}
+
+Write-Host "[SUCCESS] GitHub OIDC federation configured" -ForegroundColor Green
+
+Write-Host "[STEP] Creating configuration file..." -ForegroundColor Blue
+$TenantId = az account show --query tenantId -o tsv
+$ConfigFile = "../config/azure-config.json"
+
+$config = @{
+    subscriptionId = $SubscriptionId
+    tenantId = $TenantId
+    resourceGroupName = $ResourceGroupName
+    location = $Location
+    managedIdentity = @{
+        name = $ManagedIdentityName
+        clientId = $ClientId
+        principalId = $PrincipalId
+    }
+    github = @{
+        repository = $GitHubRepo
+        secrets = @{
+            clientId = "BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID"
+            tenantId = "BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID"
+            subscriptionId = "BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID"
+            resourceGroup = "BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP"
+        }
+    }
+    staticWebApp = @{
+        name = "swa-bookrecommender-ui"
+        appLocation = "/BookRecommender_proto/ui"
+        outputLocation = "dist"
+    }
+}
+
+$config | ConvertTo-Json -Depth 10 | Out-File -FilePath $ConfigFile -Encoding UTF8
+Write-Host "[SUCCESS] Configuration saved to $ConfigFile" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Azure Infrastructure Setup Complete!" -ForegroundColor Green
+Write-Host ""
+Write-Host "Summary:"
+Write-Host "- Resource Group: $ResourceGroupName"
+Write-Host "- Managed Identity: $ManagedIdentityName"
+Write-Host "- Client ID: $ClientId"
+Write-Host "- GitHub OIDC configured for: $GitHubRepo"
+Write-Host ""
+Write-Host "GitHub Secrets (with unique names):"
+Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID: $ClientId"
+Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID: $TenantId"
+Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID: $SubscriptionId"
+Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP: $ResourceGroupName"
+Write-Host ""
+Write-Host "Next Steps:"
+Write-Host "1. Run 'Setup-GitHubSecrets.ps1' to automatically create GitHub secrets"
+Write-Host "2. Update your GitHub Actions workflow to use the managed identity"
+Write-Host "3. Push changes to trigger deployment"

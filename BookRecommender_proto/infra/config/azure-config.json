@@ -1,0 +1,25 @@
+﻿{
+    "location":  "East US",
+    "managedIdentity":  {
+                            "principalId":  "b9ba283c-8b10-44c4-974e-2f29c17eb18b",
+                            "name":  "id-bookrecommender-github",
+                            "clientId":  "56f7a914-5fa9-4fb1-821b-4268290e718b"
+                        },
+    "staticWebApp":  {
+                         "appLocation":  "/BookRecommender_proto/ui",
+                         "name":  "swa-bookrecommender-ui",
+                         "outputLocation":  "dist"
+                     },
+    "github":  {
+                   "secrets":  {
+                                   "subscriptionId":  "BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID",
+                                   "tenantId":  "BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID",
+                                   "clientId":  "BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID",
+                                   "resourceGroup":  "BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP"
+                               },
+                   "repository":  "kiki-sen/proto"
+               },
+    "resourceGroupName":  "rg-bookrecommender-proto",
+    "subscriptionId":  "55e0f899-1653-4f68-8e9c-4c2a07ab2499",
+    "tenantId":  "b0c8aded-3ec9-4c08-9bb8-cda5bda8bbc4"
+}

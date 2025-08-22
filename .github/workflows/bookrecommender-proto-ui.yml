@@ -1,0 +1,94 @@
+name: BookRecommender Proto - Build and Deploy UI
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'BookRecommender_proto/ui/**'
+      - 'BookRecommender_proto/infra/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_STATIC_WEB_APP_NAME: swa-bookrecommender-ui
+  APP_LOCATION: "/BookRecommender_proto/ui"
+  OUTPUT_LOCATION: "dist"
+
+jobs:
+  build-and-test:
+    name: Build and Test Angular App
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: 'BookRecommender_proto/ui/package-lock.json'
+
+    - name: Install dependencies
+      working-directory: ./BookRecommender_proto/ui
+      run: npm ci
+
+    - name: Run tests
+      working-directory: ./BookRecommender_proto/ui
+      run: npm run test -- --watch=false --browsers=ChromeHeadless
+
+    - name: Build application for production
+      working-directory: ./BookRecommender_proto/ui
+      run: npm run build -- --configuration=production
+
+    - name: Upload build artifacts
+      if: matrix.node-version == '20.x'
+      uses: actions/upload-artifact@v4
+      with:
+        name: angular-build
+        path: BookRecommender_proto/ui/dist/
+        retention-days: 30
+
+  deploy-to-azure:
+    name: Deploy to Azure Static Web Apps
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+        lfs: false
+
+    - name: Azure Login using OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID }}
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: angular-build
+        path: ./BookRecommender_proto/ui/dist
+
+    - name: Deploy to Azure Static Web Apps
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: "upload"
+        app_location: ${{ env.APP_LOCATION }}
+        output_location: ${{ env.OUTPUT_LOCATION }}
+        skip_app_build: true
