@@ -6,6 +6,7 @@ on:
     paths:
       - 'BookRecommender_proto/ui/**'
       - 'BookRecommender_proto/infra/**'
+      - '.github/workflows/bookrecommender-proto-ui.yml'
   workflow_dispatch:
 
 permissions:
@@ -86,9 +87,8 @@ jobs:
     - name: Deploy to Azure Static Web Apps
       uses: Azure/static-web-apps-deploy@v1
       with:
-        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
-        app_location: ${{ env.APP_LOCATION }}
-        output_location: ${{ env.OUTPUT_LOCATION }}
+        app_location: "./BookRecommender_proto/ui/dist/ui"
+        output_location: "."
         skip_app_build: true
