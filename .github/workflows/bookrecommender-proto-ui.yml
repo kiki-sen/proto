@@ -84,9 +84,16 @@ jobs:
         name: angular-build
         path: ./BookRecommender_proto/ui/dist
 
+    - name: Get Azure Static Web Apps deployment token
+      run: |
+        DEPLOYMENT_TOKEN=$(az staticwebapp secrets list --name ${{ env.AZURE_STATIC_WEB_APP_NAME }} --query "properties.apiKey" --output tsv)
+        echo "::add-mask::$DEPLOYMENT_TOKEN"
+        echo "DEPLOYMENT_TOKEN=$DEPLOYMENT_TOKEN" >> $GITHUB_ENV
+
     - name: Deploy to Azure Static Web Apps
       uses: Azure/static-web-apps-deploy@v1
       with:
+        deployment_token: ${{ env.DEPLOYMENT_TOKEN }}
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
         app_location: "./BookRecommender_proto/ui/dist/ui"
