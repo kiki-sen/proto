@@ -93,9 +93,9 @@ jobs:
     - name: Deploy to Azure Static Web Apps
       uses: Azure/static-web-apps-deploy@v1
       with:
-        deployment_token: ${{ env.DEPLOYMENT_TOKEN }}
+        azure_static_web_apps_api_token: ${{ env.DEPLOYMENT_TOKEN }}
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
-        app_location: "./BookRecommender_proto/ui/dist/ui"
+        app_location: "./BookRecommender_proto/ui/dist/ui/browser"
         output_location: "."
         skip_app_build: true
