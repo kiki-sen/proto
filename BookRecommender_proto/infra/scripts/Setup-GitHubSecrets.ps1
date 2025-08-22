@@ -39,6 +39,7 @@ $TenantId = $config.tenantId
 $ResourceGroupName = $config.resourceGroupName
 $ClientId = $config.managedIdentity.clientId
 $GitHubRepo = $config.github.repository
+$StaticWebAppName = $config.staticWebApp.name
 
 Write-Host "[STEP] Setting GitHub repository context to: $GitHubRepo" -ForegroundColor Blue
 
@@ -58,6 +59,23 @@ Write-Host "[STEP] Creating GitHub secret: BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_
 $ResourceGroupName | gh secret set BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP -R $GitHubRepo
 Write-Host "[SUCCESS] Secret BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP created" -ForegroundColor Green
 
+Write-Host "[STEP] Retrieving Static Web App deployment token..." -ForegroundColor Blue
+try {
+    $deploymentToken = az staticwebapp secrets list --name $StaticWebAppName --resource-group $ResourceGroupName --query "properties.apiKey" -o tsv
+    if ([string]::IsNullOrEmpty($deploymentToken)) {
+        Write-Host "[ERROR] Failed to retrieve deployment token. Make sure the Static Web App exists." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "[SUCCESS] Deployment token retrieved" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Failed to retrieve deployment token. Make sure the Static Web App exists and you have access." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "[STEP] Creating GitHub secret: AZURE_STATIC_WEB_APPS_API_TOKEN" -ForegroundColor Blue
+$deploymentToken | gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN -R $GitHubRepo
+Write-Host "[SUCCESS] Secret AZURE_STATIC_WEB_APPS_API_TOKEN created" -ForegroundColor Green
+
 Write-Host "[STEP] Verifying GitHub secrets..." -ForegroundColor Blue
 $secretsList = gh secret list -R $GitHubRepo --json name | ConvertFrom-Json
 
@@ -65,7 +83,8 @@ $expectedSecrets = @(
     "BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID",
     "BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID", 
     "BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID",
-    "BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP"
+    "BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP",
+    "AZURE_STATIC_WEB_APPS_API_TOKEN"
 )
 
 $allFound = $true
@@ -94,6 +113,7 @@ if ($allFound) {
     Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID"
     Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID"
     Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP"
+    Write-Host "- AZURE_STATIC_WEB_APPS_API_TOKEN"
     Write-Host ""
     Write-Host "Next Steps:"
     Write-Host "1. Push changes to trigger the deployment workflow"

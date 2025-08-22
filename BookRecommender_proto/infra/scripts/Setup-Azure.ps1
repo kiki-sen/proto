@@ -2,7 +2,7 @@
 param(
     [string]$SubscriptionId = "",
     [string]$ResourceGroupName = "rg-bookrecommender-proto",
-    [string]$Location = "East US",
+    [string]$Location = "West Europe",
     [string]$ManagedIdentityName = "id-bookrecommender-github",
     [string]$GitHubRepo = "kiki-sen/proto"
 )
@@ -121,6 +121,22 @@ Write-Host "[SUCCESS] GitHub PR credential created with correct subject" -Foregr
 
 Write-Host "[SUCCESS] GitHub OIDC federation configured" -ForegroundColor Green
 
+Write-Host "[STEP] Creating Azure Static Web App..." -ForegroundColor Blue
+$StaticWebAppName = "swa-bookrecommender-ui"
+try {
+    $existingSwa = az staticwebapp show --name $StaticWebAppName --resource-group $ResourceGroupName 2>$null | ConvertFrom-Json
+    Write-Host "[SUCCESS] Static Web App already exists" -ForegroundColor Green
+} catch {
+    Write-Host "[INFO] Creating new Static Web App: $StaticWebAppName" -ForegroundColor Blue
+    # Create Static Web App without GitHub integration (we'll handle deployment via GitHub Actions)
+    $swaResult = az staticwebapp create --name $StaticWebAppName --resource-group $ResourceGroupName --location $Location --output json | ConvertFrom-Json
+    Write-Host "[SUCCESS] Static Web App created successfully" -ForegroundColor Green
+    
+    # Wait a moment for the resource to be fully provisioned
+    Write-Host "[INFO] Waiting for Static Web App to be fully provisioned..." -ForegroundColor Blue
+    Start-Sleep -Seconds 10
+}
+
 Write-Host "[STEP] Creating configuration file..." -ForegroundColor Blue
 $TenantId = az account show --query tenantId -o tsv
 $ConfigFile = "../config/azure-config.json"
@@ -161,6 +177,7 @@ Write-Host "Summary:"
 Write-Host "- Resource Group: $ResourceGroupName"
 Write-Host "- Managed Identity: $ManagedIdentityName"
 Write-Host "- Client ID: $ClientId"
+Write-Host "- Static Web App: $StaticWebAppName"
 Write-Host "- GitHub OIDC configured for: $GitHubRepo"
 Write-Host ""
 Write-Host "GitHub Secrets (with unique names):"

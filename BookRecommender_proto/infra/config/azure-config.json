@@ -1,5 +1,5 @@
 ﻿{
-    "location":  "East US",
+    "location":  "West Europe",
     "managedIdentity":  {
                             "principalId":  "b9ba283c-8b10-44c4-974e-2f29c17eb18b",
                             "name":  "id-bookrecommender-github",
