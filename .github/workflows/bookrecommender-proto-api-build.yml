@@ -101,7 +101,7 @@ jobs:
     - name: Run container security scan
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ steps.meta.outputs.tags }}
+        image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
         format: 'sarif'
         output: 'trivy-results.sarif'
 
