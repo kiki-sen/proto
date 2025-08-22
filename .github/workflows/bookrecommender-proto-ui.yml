@@ -15,8 +15,6 @@ permissions:
 
 env:
   AZURE_STATIC_WEB_APP_NAME: swa-bookrecommender-ui
-  APP_LOCATION: "/BookRecommender_proto/ui"
-  OUTPUT_LOCATION: "dist"
 
 jobs:
   build-and-test:
