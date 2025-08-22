@@ -42,6 +42,23 @@ jobs:
         tenant-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID }}
 
+    - name: Generate production config.json
+      run: |
+        # Get the Container App URL
+        API_URL=$(az containerapp show --name bookrecommender-api --resource-group rg-bookrecommender-proto --query "properties.configuration.ingress.fqdn" --output tsv)
+        API_URL="https://$API_URL"
+        
+        # Create the production config.json
+        cat > ./BookRecommender_proto/ui/dist/ui/browser/config.json << EOF
+        {
+          "apiUrl": "$API_URL",
+          "environment": "production"
+        }
+        EOF
+        
+        echo "Generated config.json with API URL: $API_URL"
+        cat ./BookRecommender_proto/ui/dist/ui/browser/config.json
+
     - name: Get Azure Static Web Apps deployment token
       run: |
         DEPLOYMENT_TOKEN=$(az staticwebapp secrets list --name ${{ env.AZURE_STATIC_WEB_APP_NAME }} --query "properties.apiKey" --output tsv)

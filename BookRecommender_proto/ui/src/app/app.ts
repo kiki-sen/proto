@@ -1,8 +1,9 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { inject } from '@angular/core';
+import { ConfigService } from './config.service';
 
 @Component({
   selector: 'app-root',
@@ -10,16 +11,27 @@ import { inject } from '@angular/core';
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
-export class App {
+export class App implements OnInit {
   private http = inject(HttpClient);
+  private configService = inject(ConfigService);
   
   protected readonly title = signal('ui');
   protected readonly nameInput = signal('');
   protected readonly greetingResponse = signal('');
   protected readonly isLoading = signal(false);
   
-  // Environment-aware API base URL
-  private readonly apiBaseUrl = this.getApiBaseUrl();
+  private apiBaseUrl = 'http://localhost:5206'; // Default fallback
+  
+  async ngOnInit() {
+    // Load configuration at startup
+    try {
+      const config = await this.configService.loadConfig();
+      this.apiBaseUrl = config.apiUrl;
+      console.log('Loaded API URL from config:', this.apiBaseUrl);
+    } catch (error) {
+      console.error('Failed to load config, using default:', error);
+    }
+  }
   
   async callGreetingApi() {
     this.isLoading.set(true);
@@ -51,24 +63,5 @@ export class App {
   updateNameInput(event: Event) {
     const target = event.target as HTMLInputElement;
     this.nameInput.set(target.value);
-  }
-  
-  private getApiBaseUrl(): string {
-    // Check if we're running in development (localhost)
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:5206';
-    }
-    
-    // For Azure Static Web Apps with containerized API
-    if (window.location.hostname.includes('.azurestaticapps.net')) {
-      // This will be the URL of our containerized API (e.g., Azure Container Apps)
-      // We'll set this as an environment variable during build
-      // For now, using a placeholder - we'll configure this in CI/CD
-      return 'https://bookrecommender-api.azurecontainerapps.io'; // Placeholder URL
-    }
-    
-    // For other production environments
-    // You could also read this from a configuration file or environment variable
-    return ''; // Default to relative URLs for same-domain deployments
   }
 }
