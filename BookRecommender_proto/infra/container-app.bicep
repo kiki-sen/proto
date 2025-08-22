@@ -74,6 +74,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               name: 'ASPNETCORE_URLS'
               value: 'http://+:8080'
             }
+            {
+              name: 'CORS__AllowedOrigins'
+              value: staticWebAppUrl != '' ? '${staticWebAppUrl};https://localhost:4200;http://localhost:4200' : 'https://localhost:4200;http://localhost:4200'
+            }
           ]
           resources: {
             cpu: json('0.25')

@@ -20,12 +20,13 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            // Allow Azure Static Web Apps and other production domains
-            policy.WithOrigins(
-                      "https://*.azurestaticapps.net",
-                      "https://localhost:4200", // For local testing
-                      "http://localhost:4200"   // For local testing
-                   )
+            // Get allowed origins from environment variable or configuration
+            var allowedOrigins = builder.Configuration["CORS:AllowedOrigins"]?.Split(';', StringSplitOptions.RemoveEmptyEntries)
+                ?? new[] { "https://localhost:4200", "http://localhost:4200" };
+            
+            Console.WriteLine($"CORS configured for origins: {string.Join(", ", allowedOrigins)}");
+            
+            policy.WithOrigins(allowedOrigins)
                   .AllowAnyMethod()
                   .AllowAnyHeader()
                   .AllowCredentials();

@@ -47,11 +47,19 @@ jobs:
         # Use the latest image built from the build workflow
         IMAGE_TAG="${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:latest"
         
-        # Update the container app with the new image
+        # Get Static Web App URL for CORS configuration
+        SWA_URL=$(az staticwebapp show --name swa-bookrecommender-ui --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query defaultHostname --output tsv 2>/dev/null || echo "")
+        if [ ! -z "$SWA_URL" ]; then
+          SWA_URL="https://$SWA_URL"
+          echo "Found Static Web App URL: $SWA_URL"
+        fi
+        
+        # Update the container app with the new image and CORS configuration
         az containerapp update \
           --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --image $IMAGE_TAG
+          --image $IMAGE_TAG \
+          --set-env-vars "CORS__AllowedOrigins=${SWA_URL};https://localhost:4200;http://localhost:4200"
 
     - name: Verify deployment
       run: |
