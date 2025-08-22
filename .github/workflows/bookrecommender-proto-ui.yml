@@ -1,13 +1,17 @@
 name: BookRecommender Proto - Build and Deploy UI
 
+# DEPRECATED: Replaced by separate build/deploy workflows
+# - bookrecommender-proto-ui-build.yml (build)
+# - bookrecommender-proto-ui-deploy.yml (deploy)
+# Remove this file after confirming new workflows work correctly
 on:
-  push:
-    branches: [ main, master ]
-    paths:
-      - 'BookRecommender_proto/ui/**'
-      - 'BookRecommender_proto/infra/**'
-      - '.github/workflows/bookrecommender-proto-ui.yml'
-  workflow_dispatch:
+  # push:
+  #   branches: [ main, master ]
+  #   paths:
+  #     - 'BookRecommender_proto/ui/**'
+  #     - 'BookRecommender_proto/infra/**'
+  #     - '.github/workflows/bookrecommender-proto-ui.yml'
+  workflow_dispatch: # Keep manual trigger for emergency fallback
 
 permissions:
   id-token: write

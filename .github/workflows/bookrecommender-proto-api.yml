@@ -1,0 +1,59 @@
+name: BookRecommender Proto - Deploy API
+
+on:
+  workflow_run:
+    workflows: ["BookRecommender Proto - Build API"]
+    types: [completed]
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: bookrecommender-api
+  AZURE_CONTAINER_APP_NAME: bookrecommender-api
+  AZURE_RESOURCE_GROUP: rg-bookrecommender-proto
+
+jobs:
+  deploy-to-azure:
+    name: Deploy to Azure Container Apps
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+    - name: Azure Login using OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID }}
+
+    - name: Deploy to Azure Container Apps
+      run: |
+        # Use the latest image built from the build workflow
+        IMAGE_TAG="${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:latest"
+        
+        # Update the container app with the new image
+        az containerapp update \
+          --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --image $IMAGE_TAG
+
+    - name: Verify deployment
+      run: |
+        # Get the FQDN of the container app
+        FQDN=$(az containerapp show \
+          --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --query properties.configuration.ingress.fqdn \
+          --output tsv)
+        
+        echo "API deployed to: https://$FQDN"
+        
+        # Test the health endpoint
+        curl -f "https://$FQDN/api/health" || exit 1
+        echo "Health check passed!"

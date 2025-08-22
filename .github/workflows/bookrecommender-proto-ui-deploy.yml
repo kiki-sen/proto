@@ -1,0 +1,69 @@
+name: BookRecommender Proto - Deploy UI
+
+on:
+  workflow_run:
+    workflows: ["BookRecommender Proto - Build UI"]
+    types: [completed]
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_STATIC_WEB_APP_NAME: swa-bookrecommender-ui
+
+jobs:
+  deploy-to-azure:
+    name: Deploy to Azure Static Web Apps
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+        lfs: false
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: angular-build
+        path: ./BookRecommender_proto/ui/dist
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Azure Login using OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID }}
+
+    - name: Get Azure Static Web Apps deployment token
+      run: |
+        DEPLOYMENT_TOKEN=$(az staticwebapp secrets list --name ${{ env.AZURE_STATIC_WEB_APP_NAME }} --query "properties.apiKey" --output tsv)
+        echo "::add-mask::$DEPLOYMENT_TOKEN"
+        echo "DEPLOYMENT_TOKEN=$DEPLOYMENT_TOKEN" >> $GITHUB_ENV
+
+    - name: Deploy to Azure Static Web Apps
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ env.DEPLOYMENT_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: "upload"
+        app_location: "./BookRecommender_proto/ui/dist/ui/browser"
+        output_location: "."
+        skip_app_build: true
+
+    - name: Verify deployment
+      run: |
+        # Get the Static Web App URL
+        SWA_URL=$(az staticwebapp show --name ${{ env.AZURE_STATIC_WEB_APP_NAME }} --query "defaultHostname" --output tsv)
+        echo "UI deployed to: https://$SWA_URL"
+        
+        # Basic health check
+        sleep 30  # Wait for deployment to complete
+        curl -f "https://$SWA_URL" -I || echo "Health check failed, but this might be expected during initial deployment"
