@@ -38,12 +38,14 @@ try {
     $currentAccount = $accountInfo | ConvertFrom-Json
     Write-Host "Logged into Azure as: $($currentAccount.user.name)" -ForegroundColor Green
 
-    # Register required Azure providers
+    # Register required Azure providers (one-time setup)
     Write-Host "Registering Azure providers..." -ForegroundColor Yellow
     Write-Host "   Registering Microsoft.App provider..."
     az provider register --namespace Microsoft.App --wait
     Write-Host "   Registering Microsoft.OperationalInsights provider..."
     az provider register --namespace Microsoft.OperationalInsights --wait
+    Write-Host "   Registering Microsoft.ContainerRegistry provider..."
+    az provider register --namespace Microsoft.ContainerRegistry --wait
     Write-Host "Azure providers registered successfully" -ForegroundColor Green
 
     # Create resource group if it doesn't exist

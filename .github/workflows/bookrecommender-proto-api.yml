@@ -32,16 +32,6 @@ jobs:
         tenant-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID }}
 
-    - name: Register Azure providers
-      run: |
-        # Register required resource providers
-        az provider register --namespace Microsoft.App --wait
-        az provider register --namespace Microsoft.OperationalInsights --wait
-        
-        # Verify registration status
-        az provider show --namespace Microsoft.App --query registrationState
-        az provider show --namespace Microsoft.OperationalInsights --query registrationState
-
     - name: Deploy to Azure Container Apps
       run: |
         # Use the latest image built from the build workflow
