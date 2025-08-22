@@ -50,7 +50,20 @@ This automatically creates GitHub secrets:
 - ✅ `BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID`
 - ✅ `BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP`
 
-### 3. Manual Step: Create Azure Static Web App API Token
+### 3. Deploy Container App Infrastructure (API Backend)
+
+```powershell
+.\Deploy-ContainerApp.ps1
+```
+
+This creates:
+- ✅ Azure Container Apps Environment
+- ✅ Log Analytics Workspace  
+- ✅ Container App for .NET API
+- ✅ Health checks and auto-scaling
+- ✅ HTTPS ingress configuration
+
+### 4. Manual Step: Create Azure Static Web App API Token
 
 **⚠️ Important:** One secret must be created manually after the Static Web App is created:
 

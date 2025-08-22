@@ -1,9 +1,36 @@
-<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: Arial, sans-serif;">
-  <div style="text-align: center;">
-    <h1 style="color: #333; margin-bottom: 20px;">Hello World!</h1>
-    <p style="color: #666; font-size: 18px;">Welcome to Angular 18 - {{ title() }}</p>
+<div class="main-container">
+  <div class="content-card">
+    <h1 class="title">BookRecommender Proto</h1>
+    <p class="subtitle">Angular 18 + .NET Minimal API</p>
+    
+    <div class="input-group">
+      <label for="nameInput" class="input-label">Enter your name:</label>
+      <input 
+        id="nameInput"
+        type="text" 
+        [value]="nameInput()"
+        (input)="updateNameInput($event)"
+        placeholder="Your name"
+        class="name-input"
+      />
+    </div>
+    
+    <button 
+      (click)="callGreetingApi()"
+      [disabled]="isLoading()"
+      class="greeting-button"
+      [class.loading]="isLoading()"
+    >
+      {{ isLoading() ? 'Loading...' : 'Say Hello!' }}
+    </button>
+    
+    @if (greetingResponse()) {
+      <div class="response-container">
+        <h3 class="response-title">API Response:</h3>
+        <p class="response-message">{{ greetingResponse() }}</p>
+      </div>
+    }
   </div>
 </div>
-
 
 <router-outlet />
