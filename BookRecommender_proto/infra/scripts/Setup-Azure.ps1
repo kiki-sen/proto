@@ -73,25 +73,51 @@ try {
     Write-Host "[SUCCESS] Contributor role assigned to Resource Group" -ForegroundColor Green
 }
 
-Write-Host "[STEP] Setting up GitHub OIDC federation" -ForegroundColor Blue
-
-# Create main branch credential
+Write-Host "[STEP] Cleaning up old App Registration approaches (if any)" -ForegroundColor Blue
 try {
-    $existingMainCred = az identity federated-credential show --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName 2>$null | ConvertFrom-Json
-    Write-Host "[SUCCESS] GitHub main branch credential already exists" -ForegroundColor Green
+    $oldApps = az ad app list --display-name "github-deploy-proto" --query "[].{appId:appId,displayName:displayName}" | ConvertFrom-Json
+    if ($oldApps -and $oldApps.Count -gt 0) {
+        foreach ($app in $oldApps) {
+            Write-Host "[INFO] Found old App Registration: $($app.displayName) ($($app.appId))" -ForegroundColor Yellow
+            Write-Host "[INFO] Deleting old App Registration to ensure clean Managed Identity setup..." -ForegroundColor Yellow
+            az ad app delete --id $app.appId
+            Write-Host "[SUCCESS] Old App Registration deleted" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "[INFO] No old App Registrations found" -ForegroundColor Green
+    }
 } catch {
-    az identity federated-credential create --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "repo:$GitHubRepo:ref:refs/heads/main" --audience "api://AzureADTokenExchange"
-    Write-Host "[SUCCESS] GitHub main branch credential created" -ForegroundColor Green
+    Write-Host "[INFO] No cleanup needed for App Registrations" -ForegroundColor Green
 }
 
-# Create PR credential
+Write-Host "[STEP] Setting up GitHub OIDC federation with Managed Identity" -ForegroundColor Blue
+
+# Delete and recreate main branch credential to ensure correct format
 try {
-    $existingPrCred = az identity federated-credential show --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName 2>$null | ConvertFrom-Json
-    Write-Host "[SUCCESS] GitHub PR credential already exists" -ForegroundColor Green
+    az identity federated-credential delete --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --yes 2>$null
+    Write-Host "[INFO] Deleted existing main branch credential" -ForegroundColor Yellow
 } catch {
-    az identity federated-credential create --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "repo:$GitHubRepo:pull_request" --audience "api://AzureADTokenExchange"
-    Write-Host "[SUCCESS] GitHub PR credential created" -ForegroundColor Green
+    Write-Host "[INFO] No existing main branch credential to delete" -ForegroundColor Green
 }
+
+$mainSubject = "repo:${GitHubRepo}:ref:refs/heads/main"
+Write-Host "[INFO] Creating main credential with subject: $mainSubject" -ForegroundColor Blue
+Write-Host "[DEBUG] GitHubRepo variable is: '$GitHubRepo'" -ForegroundColor Cyan
+az identity federated-credential create --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "$mainSubject" --audience "api://AzureADTokenExchange"
+Write-Host "[SUCCESS] GitHub main branch credential created with correct subject" -ForegroundColor Green
+
+# Delete and recreate PR credential to ensure correct format
+try {
+    az identity federated-credential delete --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --yes 2>$null
+    Write-Host "[INFO] Deleted existing PR credential" -ForegroundColor Yellow
+} catch {
+    Write-Host "[INFO] No existing PR credential to delete" -ForegroundColor Green
+}
+
+$prSubject = "repo:${GitHubRepo}:pull_request"
+Write-Host "[INFO] Creating PR credential with subject: $prSubject" -ForegroundColor Blue
+az identity federated-credential create --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "$prSubject" --audience "api://AzureADTokenExchange"
+Write-Host "[SUCCESS] GitHub PR credential created with correct subject" -ForegroundColor Green
 
 Write-Host "[SUCCESS] GitHub OIDC federation configured" -ForegroundColor Green
 
