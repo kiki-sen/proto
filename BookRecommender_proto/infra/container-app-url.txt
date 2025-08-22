@@ -1,0 +1,1 @@
+﻿https://bookrecommender-api.jollyocean-de9329ef.eastus.azurecontainerapps.io
