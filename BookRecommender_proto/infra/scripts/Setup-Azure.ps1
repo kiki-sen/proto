@@ -45,18 +45,37 @@ try {
 }
 
 Write-Host "[STEP] Creating Managed Identity: $ManagedIdentityName" -ForegroundColor Blue
+$managedIdentityResult = $null
 try {
-    $managedIdentityResult = az identity show --name $ManagedIdentityName --resource-group $ResourceGroupName --output json | ConvertFrom-Json
+    $managedIdentityResult = az identity show --name $ManagedIdentityName --resource-group $ResourceGroupName --output json 2>$null | ConvertFrom-Json
     Write-Host "[SUCCESS] Managed Identity already exists" -ForegroundColor Green
 } catch {
+    Write-Host "[INFO] Creating new Managed Identity..." -ForegroundColor Blue
     $managedIdentityResult = az identity create --name $ManagedIdentityName --resource-group $ResourceGroupName --output json | ConvertFrom-Json
     Write-Host "[SUCCESS] Managed Identity created successfully" -ForegroundColor Green
+    
+    # Wait a moment for the identity to be fully provisioned
+    Write-Host "[INFO] Waiting for Managed Identity to be fully provisioned..." -ForegroundColor Blue
+    Start-Sleep -Seconds 15
+}
+
+if (-not $managedIdentityResult) {
+    Write-Host "[ERROR] Failed to create or retrieve Managed Identity" -ForegroundColor Red
+    exit 1
 }
 
 $ClientId = $managedIdentityResult.clientId
 $PrincipalId = $managedIdentityResult.principalId
 
+if ([string]::IsNullOrEmpty($ClientId) -or [string]::IsNullOrEmpty($PrincipalId)) {
+    Write-Host "[ERROR] Managed Identity creation failed - missing ClientId or PrincipalId" -ForegroundColor Red
+    Write-Host "[DEBUG] ClientId: '$ClientId'" -ForegroundColor Yellow
+    Write-Host "[DEBUG] PrincipalId: '$PrincipalId'" -ForegroundColor Yellow
+    exit 1
+}
+
 Write-Host "[SUCCESS] Client ID: $ClientId" -ForegroundColor Green
+Write-Host "[SUCCESS] Principal ID: $PrincipalId" -ForegroundColor Green
 
 Write-Host "[STEP] Assigning Contributor role to Managed Identity for Resource Group" -ForegroundColor Blue
 $rgScope = az group show --name $ResourceGroupName --query id -o tsv
@@ -103,8 +122,14 @@ try {
 $mainSubject = "repo:${GitHubRepo}:ref:refs/heads/main"
 Write-Host "[INFO] Creating main credential with subject: $mainSubject" -ForegroundColor Blue
 Write-Host "[DEBUG] GitHubRepo variable is: '$GitHubRepo'" -ForegroundColor Cyan
-az identity federated-credential create --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "$mainSubject" --audience "api://AzureADTokenExchange"
-Write-Host "[SUCCESS] GitHub main branch credential created with correct subject" -ForegroundColor Green
+try {
+    az identity federated-credential create --name "github-main" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "$mainSubject" --audience "api://AzureADTokenExchange"
+    Write-Host "[SUCCESS] GitHub main branch credential created with correct subject" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Failed to create main branch federated credential" -ForegroundColor Red
+    Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
 # Delete and recreate PR credential to ensure correct format
 try {
@@ -116,8 +141,14 @@ try {
 
 $prSubject = "repo:${GitHubRepo}:pull_request"
 Write-Host "[INFO] Creating PR credential with subject: $prSubject" -ForegroundColor Blue
-az identity federated-credential create --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "$prSubject" --audience "api://AzureADTokenExchange"
-Write-Host "[SUCCESS] GitHub PR credential created with correct subject" -ForegroundColor Green
+try {
+    az identity federated-credential create --name "github-pr" --identity-name $ManagedIdentityName --resource-group $ResourceGroupName --issuer "https://token.actions.githubusercontent.com" --subject "$prSubject" --audience "api://AzureADTokenExchange"
+    Write-Host "[SUCCESS] GitHub PR credential created with correct subject" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Failed to create PR federated credential" -ForegroundColor Red
+    Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "[SUCCESS] GitHub OIDC federation configured" -ForegroundColor Green
 
@@ -140,6 +171,13 @@ try {
 Write-Host "[STEP] Creating configuration file..." -ForegroundColor Blue
 $TenantId = az account show --query tenantId -o tsv
 $ConfigFile = "../config/azure-config.json"
+
+# Ensure config directory exists
+$ConfigDir = Split-Path -Path $ConfigFile -Parent
+if (-not (Test-Path -Path $ConfigDir)) {
+    New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null
+    Write-Host "[INFO] Created config directory: $ConfigDir" -ForegroundColor Blue
+}
 
 $config = @{
     subscriptionId = $SubscriptionId
