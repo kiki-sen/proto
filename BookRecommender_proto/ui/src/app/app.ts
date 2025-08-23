@@ -1,8 +1,9 @@
 import { Component, signal, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { ConfigService } from './config.service';
 
 @Component({
@@ -40,20 +41,39 @@ export class App implements OnInit {
     console.log('API Base URL:', this.apiBaseUrl);
     console.log('Full API URL:', `${this.apiBaseUrl}/api/greet?name=${encodeURIComponent(this.nameInput())}`);
     console.log('Current hostname:', window.location.hostname);
+    console.log('Current origin:', window.location.origin);
     
     try {
-      const response = await this.http.get<{message: string, timestamp: string}>(
-        `${this.apiBaseUrl}/api/greet?name=${encodeURIComponent(this.nameInput())}`
-      ).toPromise();
+      const response = await firstValueFrom(
+        this.http.get<{message: string, timestamp: string}>(
+          `${this.apiBaseUrl}/api/greet?name=${encodeURIComponent(this.nameInput())}`
+        )
+      );
       
-      if (response) {
-        this.greetingResponse.set(response.message);
-      }
+      console.log('API response received:', response);
+      this.greetingResponse.set(response.message);
     } catch (error) {
-      console.error('Error calling API:', error);
-      const errorMessage = window.location.hostname === 'localhost' 
-        ? 'Error calling API. Make sure the API is running on http://localhost:5206'
-        : 'Error calling API. Please check your connection and try again.';
+      console.error('Detailed error calling API:', {
+        error,
+        status: (error as HttpErrorResponse).status,
+        statusText: (error as HttpErrorResponse).statusText,
+        message: (error as HttpErrorResponse).message,
+        url: (error as HttpErrorResponse).url,
+        headers: (error as HttpErrorResponse).headers
+      });
+      
+      let errorMessage = 'Error calling API: ';
+      const httpError = error as HttpErrorResponse;
+      if (httpError.status === 0) {
+        errorMessage += 'Network error or CORS issue. Check browser console.';
+      } else if (httpError.status >= 400 && httpError.status < 500) {
+        errorMessage += `Client error (${httpError.status}): ${httpError.statusText || httpError.message}`;
+      } else if (httpError.status >= 500) {
+        errorMessage += `Server error (${httpError.status}): ${httpError.statusText || httpError.message}`;
+      } else {
+        errorMessage += httpError.message || 'Unknown error';
+      }
+      
       this.greetingResponse.set(errorMessage);
     } finally {
       this.isLoading.set(false);
