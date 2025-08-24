@@ -174,3 +174,8 @@ testem.log
 Thumbs.db
 
 dist
+
+# Azure configuration files
+azure_credentials.json
+**/azure-config.json
+config/azure-config.json
