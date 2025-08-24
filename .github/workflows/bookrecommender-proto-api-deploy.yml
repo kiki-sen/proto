@@ -44,12 +44,15 @@ jobs:
           echo "Found Static Web App URL: $SWA_URL"
         fi
         
-        # Update the container app with the new image and CORS configuration
+        # Update the container app with the new image, CORS configuration, and PostgreSQL connection
+        # Update the container app with the new image, CORS configuration, and PostgreSQL connection
         az containerapp update \
           --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --image $IMAGE_TAG \
-          --set-env-vars "CORS__AllowedOrigins=${SWA_URL};https://localhost:4200;http://localhost:4200"
+          --set-env-vars "CORS__AllowedOrigins=${SWA_URL};https://localhost:4200;http://localhost:4200" \
+          --set-env-vars "ConnectionStrings__DefaultConnection=${{ secrets.BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING }}" \
+          --set-env-vars "ASPNETCORE_ENVIRONMENT=Production"
 
     - name: Verify deployment
       run: |

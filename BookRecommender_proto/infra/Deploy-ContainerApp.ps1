@@ -6,7 +6,7 @@ param(
     [string]$ResourceGroup = "rg-bookrecommender-proto",
     
     [Parameter(Mandatory = $false)]
-    [string]$Location = "eastus",
+    [string]$Location = "North Europe",
     
     [Parameter(Mandatory = $false)]
     [string]$ContainerAppName = "bookrecommender-api",

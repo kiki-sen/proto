@@ -1,0 +1,1 @@
+﻿https://bookrecommender-api.ashycoast-c91f6680.northeurope.azurecontainerapps.io

@@ -1,25 +1,33 @@
 ﻿{
-    "location":  "West Europe",
+    "github":  {
+                   "secrets":  {
+                                   "subscriptionId":  "BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID",
+                                   "tenantId":  "BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID",
+                                   "clientId":  "BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID",
+                                   "postgresConnectionString":  "BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING",
+                                   "resourceGroup":  "BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP"
+                               },
+                   "repository":  "kiki-sen/proto"
+               },
+    "postgresql":  {
+                       "serverName":  "pg-bookrecommender-proto",
+                       "database":  "bookrecommender",
+                       "adminUser":  "pgadmin",
+                       "adminPassword":  "Secure123!",
+                       "connectionString":  "Host=pg-bookrecommender-proto.postgres.database.azure.com;Database=bookrecommender;Username=pgadmin;Password=Secure123!;SSL Mode=Require;Trust Server Certificate=true"
+                   },
     "managedIdentity":  {
-                            "principalId":  "c526d28d-3246-4628-9116-d3effe0fb818",
+                            "principalId":  "62e35365-db2d-4878-a6ab-e620a4abc1a7",
                             "name":  "id-bookrecommender-github",
-                            "clientId":  "933aea90-3d38-435d-93e4-a9ca012d85ea"
+                            "clientId":  "cce03759-0d45-45a0-8d8b-bca6e0eb0fb2"
                         },
     "staticWebApp":  {
                          "appLocation":  "/BookRecommender_proto/ui",
                          "name":  "swa-bookrecommender-ui",
                          "outputLocation":  "dist"
                      },
-    "github":  {
-                   "secrets":  {
-                                   "subscriptionId":  "BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID",
-                                   "tenantId":  "BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID",
-                                   "clientId":  "BOOKRECOMMENDER_PROTO_AZURE_CLIENT_ID",
-                                   "resourceGroup":  "BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP"
-                               },
-                   "repository":  "kiki-sen/proto"
-               },
+    "location":  "West Europe",
+    "tenantId":  "b0c8aded-3ec9-4c08-9bb8-cda5bda8bbc4",
     "resourceGroupName":  "rg-bookrecommender-proto",
-    "subscriptionId":  "55e0f899-1653-4f68-8e9c-4c2a07ab2499",
-    "tenantId":  "b0c8aded-3ec9-4c08-9bb8-cda5bda8bbc4"
+    "subscriptionId":  "55e0f899-1653-4f68-8e9c-4c2a07ab2499"
 }

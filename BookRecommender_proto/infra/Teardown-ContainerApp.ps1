@@ -44,9 +44,46 @@ try {
 
     # Check if resource group exists
     Write-Host "Checking if resource group exists..." -ForegroundColor Yellow
-    $existingRg = az group show --name $ResourceGroup 2>$null
-    if (!$existingRg) {
+    try {
+        $existingRg = az group show --name $ResourceGroup --query "name" -o tsv 2>$null
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($existingRg)) {
+            Write-Host "Resource group '$ResourceGroup' does not exist. Nothing to clean up." -ForegroundColor Yellow
+            
+            # Clean up any local files that might exist
+            if (Test-Path "container-app-url.txt") {
+                Write-Host "Removing local file: container-app-url.txt" -ForegroundColor Yellow
+                Remove-Item "container-app-url.txt" -Force
+                Write-Host "Local file removed" -ForegroundColor Green
+            }
+            
+            Write-Host ""
+            Write-Host "Container App Infrastructure Teardown Summary" -ForegroundColor Green
+            Write-Host "" 
+            Write-Host "Completed Actions:" -ForegroundColor Green
+            Write-Host "- No Azure resources found to delete"
+            Write-Host "- Local configuration files cleaned up (if any)"
+            Write-Host ""
+            Write-Host "This script is re-entrant and can be safely run multiple times." -ForegroundColor Blue
+            exit 0
+        }
+    } catch {
         Write-Host "Resource group '$ResourceGroup' does not exist. Nothing to clean up." -ForegroundColor Yellow
+        
+        # Clean up any local files that might exist
+        if (Test-Path "container-app-url.txt") {
+            Write-Host "Removing local file: container-app-url.txt" -ForegroundColor Yellow
+            Remove-Item "container-app-url.txt" -Force
+            Write-Host "Local file removed" -ForegroundColor Green
+        }
+        
+        Write-Host ""
+        Write-Host "Container App Infrastructure Teardown Summary" -ForegroundColor Green
+        Write-Host "" 
+        Write-Host "Completed Actions:" -ForegroundColor Green
+        Write-Host "- No Azure resources found to delete"
+        Write-Host "- Local configuration files cleaned up (if any)"
+        Write-Host ""
+        Write-Host "This script is re-entrant and can be safely run multiple times." -ForegroundColor Blue
         exit 0
     }
     Write-Host "Resource group '$ResourceGroup' found" -ForegroundColor Green
