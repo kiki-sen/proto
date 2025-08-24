@@ -6,6 +6,12 @@ import { inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ConfigService } from './config.service';
 
+interface Greeting {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet, FormsModule],
@@ -20,6 +26,8 @@ export class App implements OnInit {
   protected readonly nameInput = signal('');
   protected readonly greetingResponse = signal('');
   protected readonly isLoading = signal(false);
+  protected readonly allNames = signal<Greeting[]>([]);
+  protected readonly isLoadingNames = signal(false);
   
   private apiBaseUrl = 'http://localhost:5206'; // Default fallback
   
@@ -83,5 +91,48 @@ export class App implements OnInit {
   updateNameInput(event: Event) {
     const target = event.target as HTMLInputElement;
     this.nameInput.set(target.value);
+  }
+  
+  async getAllNames() {
+    this.isLoadingNames.set(true);
+    
+    console.log('Getting all names from API:', `${this.apiBaseUrl}/api/greetings`);
+    
+    try {
+      const response = await firstValueFrom(
+        this.http.get<Greeting[]>(`${this.apiBaseUrl}/api/greetings`)
+      );
+      
+      console.log('Names API response received:', response);
+      this.allNames.set(response);
+    } catch (error) {
+      console.error('Error getting all names:', error);
+      
+      let errorMessage = 'Error getting names: ';
+      const httpError = error as HttpErrorResponse;
+      if (httpError.status === 0) {
+        errorMessage += 'Network error or CORS issue. Check browser console.';
+      } else if (httpError.status >= 400 && httpError.status < 500) {
+        errorMessage += `Client error (${httpError.status}): ${httpError.statusText || httpError.message}`;
+      } else if (httpError.status >= 500) {
+        errorMessage += `Server error (${httpError.status}): ${httpError.statusText || httpError.message}`;
+      } else {
+        errorMessage += httpError.message || 'Unknown error';
+      }
+      
+      // Show error in the greeting response area for now
+      this.greetingResponse.set(errorMessage);
+    } finally {
+      this.isLoadingNames.set(false);
+    }
+  }
+  
+  formatDate(dateString: string): string {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    } catch {
+      return dateString;
+    }
   }
 }

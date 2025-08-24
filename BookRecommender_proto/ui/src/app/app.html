@@ -30,6 +30,30 @@
         <p class="response-message">{{ greetingResponse() }}</p>
       </div>
     }
+    
+    <button 
+      (click)="getAllNames()"
+      [disabled]="isLoadingNames()"
+      class="names-button"
+      [class.loading]="isLoadingNames()"
+    >
+      {{ isLoadingNames() ? 'Loading...' : 'Get All Names' }}
+    </button>
+    
+    @if (allNames().length > 0) {
+      <div class="names-container">
+        <h3 class="names-title">All Names in Database:</h3>
+        <div class="names-list">
+          @for (greeting of allNames(); track greeting.id) {
+            <div class="name-item">
+              <span class="name-text">{{ greeting.name }}</span>
+              <span class="name-date">{{ formatDate(greeting.createdAt) }}</span>
+            </div>
+          }
+        </div>
+        <p class="names-count">Total: {{ allNames().length }} name(s)</p>
+      </div>
+    }
   </div>
 </div>
 

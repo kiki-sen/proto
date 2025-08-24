@@ -13,6 +13,9 @@ param containerImage string = 'ghcr.io/kiki-sen/proto/bookrecommender-api:latest
 @description('Static Web App URL for CORS configuration')
 param staticWebAppUrl string = ''
 
+@description('PostgreSQL connection string')
+param postgresConnectionString string = ''
+
 // Container Apps Environment
 resource containerAppEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: environmentName
@@ -77,6 +80,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'CORS__AllowedOrigins'
               value: staticWebAppUrl != '' ? '${staticWebAppUrl};https://localhost:4200;http://localhost:4200' : 'https://localhost:4200;http://localhost:4200'
+            }
+            {
+              name: 'ConnectionStrings__DefaultConnection'
+              value: postgresConnectionString
             }
           ]
           resources: {

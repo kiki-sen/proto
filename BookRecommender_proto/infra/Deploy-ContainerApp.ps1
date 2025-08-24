@@ -92,6 +92,42 @@ try {
     
     Write-Host "Using Bicep template: $bicepFile" -ForegroundColor Green
     
+    # Get Static Web App URL for CORS configuration
+    Write-Host "Detecting Static Web App URL for CORS configuration..." -ForegroundColor Yellow
+    $staticWebAppUrl = ""
+    try {
+        $swaHostname = az staticwebapp show --name "swa-bookrecommender-ui" --resource-group $ResourceGroup --query "defaultHostname" -o tsv 2>$null
+        if ($swaHostname -and $swaHostname -ne "null" -and -not [string]::IsNullOrWhiteSpace($swaHostname)) {
+            $staticWebAppUrl = "https://$swaHostname"
+            Write-Host "Found Static Web App URL for CORS: $staticWebAppUrl" -ForegroundColor Green
+        } else {
+            Write-Host "Static Web App not found - CORS will only allow localhost" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "Could not detect Static Web App URL - CORS will only allow localhost" -ForegroundColor Yellow
+    }
+    
+    # Get PostgreSQL connection string from Azure configuration
+    Write-Host "Getting PostgreSQL connection string..." -ForegroundColor Yellow
+    $postgresConnectionString = ""
+    try {
+        # Read from the azure-config.json file created by Setup-Azure script
+        $configFile = "./infra/config/azure-config.json"
+        if (Test-Path $configFile) {
+            $azureConfig = Get-Content $configFile | ConvertFrom-Json
+            $postgresConnectionString = $azureConfig.postgresql.connectionString
+            Write-Host "Found PostgreSQL connection string from config file" -ForegroundColor Green
+        } else {
+            Write-Host "Azure config file not found - will construct connection string from defaults" -ForegroundColor Yellow
+            # Fallback to constructing the connection string with known defaults
+            $postgresConnectionString = "Host=pg-bookrecommender-proto.postgres.database.azure.com;Database=bookrecommender;Username=pgadmin;Password=Secure123!;SSL Mode=Require;Trust Server Certificate=true"
+            Write-Host "Using default PostgreSQL connection string" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "Could not read PostgreSQL connection string from config - using defaults" -ForegroundColor Yellow
+        $postgresConnectionString = "Host=pg-bookrecommender-proto.postgres.database.azure.com;Database=bookrecommender;Username=pgadmin;Password=Secure123!;SSL Mode=Require;Trust Server Certificate=true"
+    }
+    
     $deploymentOutput = az deployment group create `
         --resource-group $ResourceGroup `
         --name $deploymentName `
@@ -101,6 +137,8 @@ try {
             environmentName=$EnvironmentName `
             location=$Location `
             containerImage=$ContainerImage `
+            staticWebAppUrl=$staticWebAppUrl `
+            postgresConnectionString=$postgresConnectionString `
         --query 'properties.outputs' `
         --output json
 
