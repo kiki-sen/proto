@@ -1,18 +1,27 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { App } from './app';
 import { AuthService } from './services/auth.service';
+import { AuthState } from './models/auth.models';
 
 // Mock AuthService for testing
 class MockAuthService {
-  authState = {
+  private authState = new BehaviorSubject<AuthState>({
     isLoggedIn: false,
-    user: null
-  };
+    user: null,
+    token: null
+  });
+  
+  public authState$ = this.authState.asObservable();
   
   logout() {
     // Mock logout method
+  }
+  
+  getToken() {
+    return 'mock-token';
   }
 }
 

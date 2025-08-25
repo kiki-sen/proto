@@ -1,1 +1,0 @@
-﻿https://bookrecommender-api.purpleplant-7af392a8.northeurope.azurecontainerapps.io

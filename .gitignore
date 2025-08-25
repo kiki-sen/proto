@@ -179,3 +179,5 @@ dist
 azure_credentials.json
 **/azure-config.json
 config/azure-config.json
+connection-string.json
+container-app-url.txt

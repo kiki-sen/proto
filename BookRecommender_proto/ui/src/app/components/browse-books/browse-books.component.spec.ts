@@ -4,7 +4,8 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { BrowseBooksComponent } from './browse-books.component';
 import { BookService } from '../../services/book.service';
 import { AuthService } from '../../services/auth.service';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
+import { AuthState } from '../../models/auth.models';
 
 // Mock services
 class MockBookService {
@@ -29,8 +30,20 @@ class MockBookService {
 }
 
 class MockAuthService {
+  private authState = new BehaviorSubject<AuthState>({
+    isLoggedIn: false,
+    user: null,
+    token: null
+  });
+  
+  public authState$ = this.authState.asObservable();
+  
   getToken() {
     return 'mock-token';
+  }
+  
+  logout() {
+    // Mock logout method
   }
 }
 
