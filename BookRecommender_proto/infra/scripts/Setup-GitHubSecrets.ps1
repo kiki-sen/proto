@@ -40,6 +40,7 @@ $ResourceGroupName = $config.resourceGroupName
 $ClientId = $config.managedIdentity.clientId
 $GitHubRepo = $config.github.repository
 $StaticWebAppName = $config.staticWebApp.name
+$PostgresConnectionString = $config.postgresql.connectionString
 
 Write-Host "[STEP] Setting GitHub repository context to: $GitHubRepo" -ForegroundColor Blue
 
@@ -58,6 +59,10 @@ Write-Host "[SUCCESS] Secret BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID created
 Write-Host "[STEP] Creating GitHub secret: BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP" -ForegroundColor Blue
 $ResourceGroupName | gh secret set BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP -R $GitHubRepo
 Write-Host "[SUCCESS] Secret BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP created" -ForegroundColor Green
+
+Write-Host "[STEP] Creating GitHub secret: BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING" -ForegroundColor Blue
+$PostgresConnectionString | gh secret set BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING -R $GitHubRepo
+Write-Host "[SUCCESS] Secret BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING created" -ForegroundColor Green
 
 Write-Host "[STEP] Retrieving Static Web App deployment token..." -ForegroundColor Blue
 try {
@@ -84,6 +89,7 @@ $expectedSecrets = @(
     "BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID", 
     "BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID",
     "BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP",
+    "BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING",
     "AZURE_STATIC_WEB_APPS_API_TOKEN"
 )
 
@@ -113,6 +119,7 @@ if ($allFound) {
     Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_TENANT_ID"
     Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_SUBSCRIPTION_ID"
     Write-Host "- BOOKRECOMMENDER_PROTO_AZURE_RESOURCE_GROUP"
+    Write-Host "- BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING"
     Write-Host "- AZURE_STATIC_WEB_APPS_API_TOKEN"
     Write-Host ""
     Write-Host "Next Steps:"
