@@ -2,7 +2,7 @@ name: BookRecommender Proto - Deploy API
 
 on:
   workflow_run:
-    workflows: ["BookRecommender Proto - Build API"]
+    workflows: ["BookRecommender Proto - Build API", "BookRecommender Proto - Deploy UI"]
     types: [completed]
     branches: [main, master]
   workflow_dispatch:
@@ -39,15 +39,26 @@ jobs:
         
         # Get Static Web App URL for CORS configuration
         echo "Detecting Static Web App URL for CORS configuration..."
-        SWA_HOSTNAME=$(az staticwebapp show --name swa-bookrecommender-ui --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query defaultHostname --output tsv 2>&1)
         
-        if [ $? -eq 0 ] && [ ! -z "$SWA_HOSTNAME" ] && [ "$SWA_HOSTNAME" != "null" ]; then
+        # First, try to get the Static Web App hostname using the same approach as UI deployment
+        SWA_HOSTNAME=$(az staticwebapp show --name swa-bookrecommender-ui --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "defaultHostname" --output tsv 2>/dev/null)
+        
+        if [ $? -eq 0 ] && [ ! -z "$SWA_HOSTNAME" ] && [ "$SWA_HOSTNAME" != "null" ] && [[ "$SWA_HOSTNAME" != *"ERROR"* ]]; then
           SWA_URL="https://$SWA_HOSTNAME"
           echo "Found Static Web App URL: $SWA_URL"
         else
-          SWA_URL=""
-          echo "Static Web App not found or error occurred: $SWA_HOSTNAME"
-          echo "CORS will only allow localhost origins"
+          echo "Primary detection failed, trying alternative approach..."
+          # Fallback: try listing all static web apps and find ours
+          SWA_HOSTNAME=$(az staticwebapp list --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "[?name=='swa-bookrecommender-ui'].defaultHostname | [0]" --output tsv 2>/dev/null)
+          
+          if [ $? -eq 0 ] && [ ! -z "$SWA_HOSTNAME" ] && [ "$SWA_HOSTNAME" != "null" ]; then
+            SWA_URL="https://$SWA_HOSTNAME"
+            echo "Found Static Web App URL via fallback: $SWA_URL"
+          else
+            SWA_URL=""
+            echo "Could not detect Static Web App URL. CORS will only allow localhost origins."
+            echo "This might be a permissions issue with the service principal."
+          fi
         fi
         
         # Set CORS origins - include Static Web App URL if found
