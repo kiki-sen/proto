@@ -1,0 +1,35 @@
+<div class="dashboard-container">
+  <div class="dashboard-content">
+    <h1>Welcome to BookRecommender</h1>
+    
+    <div class="user-welcome" *ngIf="user">
+      <h2>Hello, {{ user.email }}!</h2>
+      <p>You successfully logged in. This is your dashboard.</p>
+      <p><small>Member since: {{ user.createdAt | date:'medium' }}</small></p>
+    </div>
+
+    <div class="dashboard-sections">
+      <div class="section-card">
+        <h3>Book Recommendations</h3>
+        <p>Get personalized book recommendations based on your preferences.</p>
+        <button class="btn-primary" disabled>Coming Soon</button>
+      </div>
+
+      <div class="section-card">
+        <h3>My Library</h3>
+        <p>Manage your reading list and track your progress.</p>
+        <button class="btn-primary" disabled>Coming Soon</button>
+      </div>
+
+      <div class="section-card">
+        <h3>Reviews</h3>
+        <p>Write and read book reviews from the community.</p>
+        <button class="btn-primary" disabled>Coming Soon</button>
+      </div>
+    </div>
+
+    <div class="placeholder-note">
+      <p><em>This is a placeholder dashboard. More features will be added as we continue building the application.</em></p>
+    </div>
+  </div>
+</div>

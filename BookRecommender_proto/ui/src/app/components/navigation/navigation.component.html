@@ -1,0 +1,17 @@
+<nav class="navbar">
+  <div class="nav-container">
+    <a routerLink="/" class="nav-brand">BookRecommender</a>
+    
+    <div class="nav-links">
+      <ng-container *ngIf="authState.isLoggedIn; else notLoggedIn">
+        <span class="user-info">Welcome, {{ authState.user?.email }}</span>
+        <button class="logout-btn" (click)="logout()">Logout</button>
+      </ng-container>
+      
+      <ng-template #notLoggedIn>
+        <a routerLink="/login" class="nav-link">Login</a>
+        <a routerLink="/register" class="nav-link">Register</a>
+      </ng-template>
+    </div>
+  </div>
+</nav>

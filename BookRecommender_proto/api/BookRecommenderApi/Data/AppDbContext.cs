@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<Greeting> Greetings { get; set; }
+    public DbSet<User> Users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,18 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // Configure User entity
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
+            entity.HasIndex(e => e.Email).IsUnique(); // Ensure unique emails
+            entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
         });
     }
 }

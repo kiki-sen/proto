@@ -1,6 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using System.Security.Claims;
 using BookRecommenderApi.Data;
 using BookRecommenderApi.Models;
+using BookRecommenderApi.Services;
+using BC = BCrypt.Net.BCrypt;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +41,32 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Add JWT service
+builder.Services.AddScoped<IJwtService, JwtService>();
+
+// Add JWT Authentication
+var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? "MyVeryLongSecretKeyForJWT_MustBeAtLeast32Characters!!";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "BookRecommenderApi";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "BookRecommenderApp";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 // Add health checks
 builder.Services.AddHealthChecks();
 
@@ -50,8 +82,86 @@ using (var scope = app.Services.CreateScope())
 // Use CORS
 app.UseCors("AllowAngularApp");
 
+// Use Authentication and Authorization
+app.UseAuthentication();
+app.UseAuthorization();
+
 // Map built-in health checks - cleaner and more standard
 app.MapHealthChecks("/api/health");
+
+// Authentication endpoints
+app.MapPost("/api/auth/register", async (RegisterRequest request, AppDbContext dbContext, IJwtService jwtService) =>
+{
+    // Validate password match
+    if (request.Password != request.ConfirmPassword)
+    {
+        return Results.BadRequest(new { message = "Passwords do not match" });
+    }
+
+    // Check if user already exists
+    var existingUser = await dbContext.Users
+        .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+    
+    if (existingUser != null)
+    {
+        return Results.BadRequest(new { message = "Email already registered" });
+    }
+
+    // Create new user
+    var user = new User
+    {
+        Email = request.Email.ToLower(),
+        PasswordHash = BC.HashPassword(request.Password),
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    dbContext.Users.Add(user);
+    await dbContext.SaveChangesAsync();
+
+    // Generate JWT token
+    var token = jwtService.GenerateToken(user);
+    var expires = DateTime.UtcNow.AddHours(24);
+
+    return Results.Ok(new AuthResponse(user.Id, user.Email, token, expires));
+});
+
+app.MapPost("/api/auth/login", async (LoginRequest request, AppDbContext dbContext, IJwtService jwtService) =>
+{
+    // Find user by email
+    var user = await dbContext.Users
+        .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+
+    if (user == null || !BC.Verify(request.Password, user.PasswordHash))
+    {
+        return Results.BadRequest(new { message = "Invalid email or password" });
+    }
+
+    // Generate JWT token
+    var token = jwtService.GenerateToken(user);
+    var expires = DateTime.UtcNow.AddHours(24);
+
+    return Results.Ok(new AuthResponse(user.Id, user.Email, token, expires));
+});
+
+// Get current user info (protected endpoint)
+app.MapGet("/api/auth/me", async (ClaimsPrincipal user, AppDbContext dbContext) =>
+{
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var currentUser = await dbContext.Users.FindAsync(userId);
+    if (currentUser == null)
+    {
+        return Results.NotFound(new { message = "User not found" });
+    }
+
+    return Results.Ok(new UserInfo(currentUser.Id, currentUser.Email, currentUser.CreatedAt));
+})
+.RequireAuthorization();
 
 // Greeting endpoint (GET with query parameter) - saves to database
 app.MapGet("/api/greet", async (string? name, AppDbContext dbContext) =>
