@@ -1,0 +1,147 @@
+<div class="browse-books-container">
+  <div class="browse-books-content">
+    <div class="header">
+      <h1>Discover Books</h1>
+      <p>Browse all books in our library and add them to your personal collection</p>
+    </div>
+
+    <!-- Search and Filter Controls -->
+    <div class="controls">
+      <div class="search-section">
+        <input 
+          type="text" 
+          [(ngModel)]="searchTerm" 
+          (input)="onSearchChange()"
+          placeholder="Search by title, author, or description..."
+          class="search-input"
+        >
+      </div>
+
+      <div class="filter-section">
+        <select 
+          [(ngModel)]="selectedGenre" 
+          (change)="onGenreChange()"
+          class="genre-select"
+        >
+          <option value="">All Genres</option>
+          <option *ngFor="let genre of availableGenres" [value]="genre">{{ genre }}</option>
+        </select>
+        
+        <button 
+          (click)="clearFilters()" 
+          class="clear-filters-btn"
+          [disabled]="!searchTerm && !selectedGenre"
+        >
+          Clear Filters
+        </button>
+      </div>
+    </div>
+
+    <!-- Results Summary -->
+    <div class="results-summary">
+      <p>Showing {{ filteredBooks.length }} of {{ books.length }} books</p>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading">
+      <p>Loading books...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="errorMessage && !isLoading" class="error-message">
+      {{ errorMessage }}
+      <button (click)="loadBooks()" class="retry-btn">Try Again</button>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && !errorMessage && filteredBooks.length === 0" class="empty-state">
+      <div *ngIf="books.length === 0">
+        <p>No books found in the system yet.</p>
+      </div>
+      <div *ngIf="books.length > 0 && filteredBooks.length === 0">
+        <p>No books match your search criteria.</p>
+        <button (click)="clearFilters()" class="clear-filters-btn">Clear Filters</button>
+      </div>
+    </div>
+
+    <!-- Books Grid -->
+    <div *ngIf="!isLoading && !errorMessage && filteredBooks.length > 0" class="books-grid">
+      <div *ngFor="let book of filteredBooks" class="book-card">
+        <!-- Book Cover or Placeholder -->
+        <div class="book-cover">
+          <img 
+            *ngIf="book.coverImageUrl" 
+            [src]="book.coverImageUrl" 
+            [alt]="book.title"
+            (error)="$event.target.style.display='none'"
+          >
+          <div *ngIf="!book.coverImageUrl" class="cover-placeholder">
+            {{ book.title.charAt(0).toUpperCase() }}
+          </div>
+        </div>
+
+        <!-- Book Info -->
+        <div class="book-info">
+          <h3 class="book-title">{{ book.title }}</h3>
+          <p class="book-author">by {{ book.author }}</p>
+          
+          <div class="book-details">
+            <span *ngIf="book.genre" class="genre">{{ book.genre }}</span>
+            <span *ngIf="book.pageCount" class="pages">{{ book.pageCount }} pages</span>
+            <span *ngIf="book.publicationDate" class="publication-date">
+              Published: {{ formatDate(book.publicationDate) }}
+            </span>
+          </div>
+
+          <p *ngIf="book.description" class="book-description">
+            {{ book.description.length > 150 ? (book.description | slice:0:150) + '...' : book.description }}
+          </p>
+
+          <!-- Added by info -->
+          <div class="added-by">
+            <small>Added by {{ book.createdByUserEmail }} on {{ formatDate(book.createdAt) }}</small>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="book-actions">
+          <!-- Success/Error Message for this book -->
+          <div *ngIf="getBookMessage(book.id)" class="book-message" 
+               [class.success-message]="getBookMessage(book.id)?.type === 'success'"
+               [class.error-message]="getBookMessage(book.id)?.type === 'error'">
+            <small>{{ getBookMessage(book.id)?.message }}</small>
+          </div>
+          
+          <div class="add-to-library-section">
+            <p class="action-label">Add to your library:</p>
+            <div class="quick-add-buttons">
+              <button 
+                (click)="addToLibrary(book, ReadingStatus.ToRead)"
+                [disabled]="isAddingToLibrary(book.id)"
+                class="add-btn to-read"
+              >
+                {{ isAddingToLibrary(book.id) ? 'Adding...' : '📚 Want to Read' }}
+              </button>
+              
+              <button 
+                (click)="addToLibrary(book, ReadingStatus.Reading)"
+                [disabled]="isAddingToLibrary(book.id)"
+                class="add-btn reading"
+              >
+                {{ isAddingToLibrary(book.id) ? 'Adding...' : '📖 Currently Reading' }}
+              </button>
+              
+              <button 
+                (click)="addToLibrary(book, ReadingStatus.Read)"
+                [disabled]="isAddingToLibrary(book.id)"
+                class="add-btn read"
+              >
+                {{ isAddingToLibrary(book.id) ? 'Adding...' : '✅ Already Read' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

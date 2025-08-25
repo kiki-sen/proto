@@ -45,7 +45,8 @@
 
 .user-info {
   color: #fff;
-  margin-right: 1rem;
+  margin: 0 0.5rem;
+  font-size: 0.9rem;
 }
 
 .logout-btn {
@@ -60,4 +61,29 @@
 
 .logout-btn:hover {
   background-color: #c82333;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .nav-container {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  
+  .nav-links {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  
+  .nav-link {
+    font-size: 0.9rem;
+    padding: 0.4rem 0.8rem;
+  }
+  
+  .user-info {
+    font-size: 0.8rem;
+    margin: 0.2rem;
+  }
 }

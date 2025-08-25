@@ -1,1 +1,1 @@
-﻿https://bookrecommender-api.ashycoast-c91f6680.northeurope.azurecontainerapps.io
+﻿https://bookrecommender-api.purpleplant-7af392a8.northeurope.azurecontainerapps.io

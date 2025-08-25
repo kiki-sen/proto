@@ -1,0 +1,160 @@
+<div class="add-book-container">
+  <div class="add-book-form">
+    <h2>Add New Book</h2>
+    
+    <form [formGroup]="addBookForm" (ngSubmit)="onSubmit()">
+      <!-- Title -->
+      <div class="form-group">
+        <label for="title">Title *</label>
+        <input 
+          id="title"
+          type="text" 
+          formControlName="title"
+          [class.error]="addBookForm.get('title')?.invalid && addBookForm.get('title')?.touched"
+          placeholder="Enter book title"
+        >
+        <div *ngIf="addBookForm.get('title')?.invalid && addBookForm.get('title')?.touched" class="error-message">
+          <span *ngIf="addBookForm.get('title')?.errors?.['required']">Title is required</span>
+          <span *ngIf="addBookForm.get('title')?.errors?.['maxlength']">Title cannot exceed 255 characters</span>
+        </div>
+      </div>
+
+      <!-- Author -->
+      <div class="form-group">
+        <label for="author">Author *</label>
+        <input 
+          id="author"
+          type="text" 
+          formControlName="author"
+          [class.error]="addBookForm.get('author')?.invalid && addBookForm.get('author')?.touched"
+          placeholder="Enter author name"
+        >
+        <div *ngIf="addBookForm.get('author')?.invalid && addBookForm.get('author')?.touched" class="error-message">
+          <span *ngIf="addBookForm.get('author')?.errors?.['required']">Author is required</span>
+          <span *ngIf="addBookForm.get('author')?.errors?.['maxlength']">Author cannot exceed 255 characters</span>
+        </div>
+      </div>
+
+      <!-- Two column layout for smaller fields -->
+      <div class="form-row">
+        <!-- ISBN -->
+        <div class="form-group">
+          <label for="isbn">ISBN</label>
+          <input 
+            id="isbn"
+            type="text" 
+            formControlName="isbn"
+            [class.error]="addBookForm.get('isbn')?.invalid && addBookForm.get('isbn')?.touched"
+            placeholder="Enter ISBN"
+          >
+          <div *ngIf="addBookForm.get('isbn')?.invalid && addBookForm.get('isbn')?.touched" class="error-message">
+            <span *ngIf="addBookForm.get('isbn')?.errors?.['maxlength']">ISBN cannot exceed 20 characters</span>
+          </div>
+        </div>
+
+        <!-- Genre -->
+        <div class="form-group">
+          <label for="genre">Genre</label>
+          <input 
+            id="genre"
+            type="text" 
+            formControlName="genre"
+            [class.error]="addBookForm.get('genre')?.invalid && addBookForm.get('genre')?.touched"
+            placeholder="Enter genre"
+          >
+          <div *ngIf="addBookForm.get('genre')?.invalid && addBookForm.get('genre')?.touched" class="error-message">
+            <span *ngIf="addBookForm.get('genre')?.errors?.['maxlength']">Genre cannot exceed 100 characters</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <!-- Publication Date -->
+        <div class="form-group">
+          <label for="publicationDate">Publication Date</label>
+          <input 
+            id="publicationDate"
+            type="date" 
+            formControlName="publicationDate"
+            [class.error]="addBookForm.get('publicationDate')?.invalid && addBookForm.get('publicationDate')?.touched"
+          >
+        </div>
+
+        <!-- Page Count -->
+        <div class="form-group">
+          <label for="pageCount">Page Count</label>
+          <input 
+            id="pageCount"
+            type="number" 
+            formControlName="pageCount"
+            [class.error]="addBookForm.get('pageCount')?.invalid && addBookForm.get('pageCount')?.touched"
+            placeholder="Number of pages"
+            min="1"
+          >
+          <div *ngIf="addBookForm.get('pageCount')?.invalid && addBookForm.get('pageCount')?.touched" class="error-message">
+            <span *ngIf="addBookForm.get('pageCount')?.errors?.['min']">Page count must be at least 1</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea 
+          id="description"
+          formControlName="description"
+          [class.error]="addBookForm.get('description')?.invalid && addBookForm.get('description')?.touched"
+          placeholder="Enter book description"
+          rows="4"
+        ></textarea>
+        <div *ngIf="addBookForm.get('description')?.invalid && addBookForm.get('description')?.touched" class="error-message">
+          <span *ngIf="addBookForm.get('description')?.errors?.['maxlength']">Description cannot exceed 2000 characters</span>
+        </div>
+      </div>
+
+      <!-- Cover Image URL -->
+      <div class="form-group">
+        <label for="coverImageUrl">Cover Image URL</label>
+        <input 
+          id="coverImageUrl"
+          type="url" 
+          formControlName="coverImageUrl"
+          [class.error]="addBookForm.get('coverImageUrl')?.invalid && addBookForm.get('coverImageUrl')?.touched"
+          placeholder="Enter image URL"
+        >
+        <div *ngIf="addBookForm.get('coverImageUrl')?.invalid && addBookForm.get('coverImageUrl')?.touched" class="error-message">
+          <span *ngIf="addBookForm.get('coverImageUrl')?.errors?.['maxlength']">URL cannot exceed 500 characters</span>
+        </div>
+      </div>
+
+      <!-- Success Message -->
+      <div *ngIf="successMessage" class="success-message">
+        {{ successMessage }}
+      </div>
+
+      <!-- Error Message -->
+      <div *ngIf="errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+
+      <!-- Buttons -->
+      <div class="form-buttons">
+        <button 
+          type="button" 
+          class="cancel-btn"
+          (click)="onCancel()"
+        >
+          Cancel
+        </button>
+        
+        <button 
+          type="submit" 
+          [disabled]="addBookForm.invalid || isLoading"
+          class="submit-btn"
+        >
+          {{ isLoading ? 'Adding Book...' : 'Add Book' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

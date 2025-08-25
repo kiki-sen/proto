@@ -1,0 +1,154 @@
+<div class="my-books-container">
+  <div class="my-books-content">
+    <div class="header">
+      <h1>My Library</h1>
+      <a routerLink="/add-book" class="add-book-btn">Add New Book</a>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="filter-controls">
+      <label>Filter by status:</label>
+      <div class="filter-buttons">
+        <button 
+          [class.active]="selectedStatus === 'all'"
+          (click)="onFilterChange('all')"
+          class="filter-btn"
+        >
+          All ({{ userBooks.length }})
+        </button>
+        <button 
+          [class.active]="selectedStatus === ReadingStatus.ToRead"
+          (click)="onFilterChange(ReadingStatus.ToRead)"
+          class="filter-btn to-read"
+        >
+          To Read ({{ getCountByStatus(ReadingStatus.ToRead) }})
+        </button>
+        <button 
+          [class.active]="selectedStatus === ReadingStatus.Reading"
+          (click)="onFilterChange(ReadingStatus.Reading)"
+          class="filter-btn reading"
+        >
+          Reading ({{ getCountByStatus(ReadingStatus.Reading) }})
+        </button>
+        <button 
+          [class.active]="selectedStatus === ReadingStatus.Read"
+          (click)="onFilterChange(ReadingStatus.Read)"
+          class="filter-btn read"
+        >
+          Read ({{ getCountByStatus(ReadingStatus.Read) }})
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading">
+      <p>Loading your books...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="errorMessage && !isLoading" class="error-message">
+      {{ errorMessage }}
+      <button (click)="loadUserBooks()" class="retry-btn">Try Again</button>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && !errorMessage && filteredBooks.length === 0" class="empty-state">
+      <div *ngIf="userBooks.length === 0">
+        <p>You haven't added any books to your library yet.</p>
+        <a routerLink="/add-book" class="add-first-book-btn">Add Your First Book</a>
+      </div>
+      <div *ngIf="userBooks.length > 0 && filteredBooks.length === 0">
+        <p>No books match the selected filter.</p>
+      </div>
+    </div>
+
+    <!-- Books Grid -->
+    <div *ngIf="!isLoading && !errorMessage && filteredBooks.length > 0" class="books-grid">
+      <div *ngFor="let userBook of filteredBooks" class="book-card">
+        <!-- Book Cover or Placeholder -->
+        <div class="book-cover">
+          <img 
+            *ngIf="userBook.book.coverImageUrl" 
+            [src]="userBook.book.coverImageUrl" 
+            [alt]="userBook.book.title"
+            (error)="$event.target.style.display='none'"
+          >
+          <div *ngIf="!userBook.book.coverImageUrl" class="cover-placeholder">
+            {{ userBook.book.title.charAt(0).toUpperCase() }}
+          </div>
+        </div>
+
+        <!-- Book Info -->
+        <div class="book-info">
+          <h3 class="book-title">{{ userBook.book.title }}</h3>
+          <p class="book-author">by {{ userBook.book.author }}</p>
+          
+          <div class="book-details">
+            <span *ngIf="userBook.book.genre" class="genre">{{ userBook.book.genre }}</span>
+            <span *ngIf="userBook.book.pageCount" class="pages">{{ userBook.book.pageCount }} pages</span>
+          </div>
+
+          <!-- Reading Status -->
+          <div class="status-section">
+            <div 
+              class="status-badge" 
+              [style.background-color]="getStatusColor(userBook.readingStatus)"
+            >
+              {{ getStatusLabel(userBook.readingStatus) }}
+            </div>
+          </div>
+
+          <!-- Reading Dates -->
+          <div *ngIf="userBook.dateStarted || userBook.dateFinished" class="reading-dates">
+            <small *ngIf="userBook.dateStarted">Started: {{ formatDate(userBook.dateStarted) }}</small>
+            <small *ngIf="userBook.dateFinished">Finished: {{ formatDate(userBook.dateFinished) }}</small>
+          </div>
+
+          <!-- Rating -->
+          <div *ngIf="userBook.rating" class="rating">
+            <span class="stars">
+              <span *ngFor="let star of [1,2,3,4,5]" 
+                    [class.filled]="star <= userBook.rating!"
+                    class="star">★</span>
+            </span>
+            <span class="rating-text">{{ userBook.rating }}/5</span>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="book-actions">
+          <!-- Quick Status Toggle -->
+          <button 
+            (click)="toggleReadingStatus(userBook)"
+            class="quick-toggle-btn"
+            [class.mark-read]="userBook.readingStatus !== ReadingStatus.Read"
+            [class.mark-unread]="userBook.readingStatus === ReadingStatus.Read"
+          >
+            {{ userBook.readingStatus === ReadingStatus.Read ? '↶ Mark Unread' : '✓ Mark Read' }}
+          </button>
+
+          <!-- Status Dropdown -->
+          <select 
+            [value]="userBook.readingStatus" 
+            (change)="onStatusChange(userBook, $event)"
+            class="status-select"
+          >
+            <option [value]="ReadingStatus.ToRead">{{ ReadingStatusLabels[ReadingStatus.ToRead] }}</option>
+            <option [value]="ReadingStatus.Reading">{{ ReadingStatusLabels[ReadingStatus.Reading] }}</option>
+            <option [value]="ReadingStatus.Read">{{ ReadingStatusLabels[ReadingStatus.Read] }}</option>
+            <option [value]="ReadingStatus.DNF">{{ ReadingStatusLabels[ReadingStatus.DNF] }}</option>
+          </select>
+
+          <!-- Remove Button -->
+          <button 
+            (click)="removeBook(userBook)"
+            class="remove-btn"
+            title="Remove from library"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

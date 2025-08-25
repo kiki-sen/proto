@@ -2,7 +2,8 @@
 param(
     [string]$SubscriptionId = "",
     [string]$ResourceGroupName = "rg-bookrecommender-proto",
-    [string]$Location = "North Europe",
+    [string]$Location = "northeurope",
+    [string]$StaticWebAppLocation = "westeurope",
     [string]$ManagedIdentityName = "id-bookrecommender-github",
     [string]$GitHubRepo = "kiki-sen/proto",
     [string]$PostgresServerName = "pg-bookrecommender-proto",
@@ -165,7 +166,7 @@ try {
 } catch {
     Write-Host "[INFO] Creating new Static Web App: $StaticWebAppName" -ForegroundColor Blue
     # Create Static Web App without GitHub integration (we'll handle deployment via GitHub Actions)
-    $swaResult = az staticwebapp create --name $StaticWebAppName --resource-group $ResourceGroupName --location $Location --output json | ConvertFrom-Json
+    $swaResult = az staticwebapp create --name $StaticWebAppName --resource-group $ResourceGroupName --location $StaticWebAppLocation --output json | ConvertFrom-Json
     Write-Host "[SUCCESS] Static Web App created successfully" -ForegroundColor Green
     
     # Wait a moment for the resource to be fully provisioned
@@ -267,14 +268,14 @@ try {
 Write-Host "[STEP] Configuring PostgreSQL firewall rules..." -ForegroundColor Blue
 try {
     # Allow Azure services - check for existing firewall rules
-    $existingRules = az postgres flexible-server firewall-rule list --name $PostgresServerName --resource-group $ResourceGroupName --query "[?name=='AllowAllAzureServicesAndResourcesWithinAzureIps']" 2>$null | ConvertFrom-Json
+    $existingRules = az postgres flexible-server firewall-rule list --server-name $PostgresServerName --resource-group $ResourceGroupName --query "[?name=='AllowAllAzureServicesAndResourcesWithinAzureIps']" 2>$null | ConvertFrom-Json
     if ($existingRules -and $existingRules.Count -gt 0) {
         Write-Host "[SUCCESS] Azure services firewall rule already exists" -ForegroundColor Green
     } else {
         Write-Host "[INFO] Creating Azure services firewall rule" -ForegroundColor Blue
         az postgres flexible-server firewall-rule create `
-            --name "AllowAllAzureServicesAndResourcesWithinAzureIps" `
-            --server-name $PostgresServerName `
+            --name $PostgresServerName `
+            --rule-name "AllowAllAzureServicesAndResourcesWithinAzureIps" `
             --resource-group $ResourceGroupName `
             --start-ip-address 0.0.0.0 `
             --end-ip-address 0.0.0.0
@@ -283,8 +284,8 @@ try {
 } catch {
     Write-Host "[INFO] Creating Azure services firewall rule (fallback)" -ForegroundColor Blue
     az postgres flexible-server firewall-rule create `
-        --name "AllowAllAzureServicesAndResourcesWithinAzureIps" `
-        --server-name $PostgresServerName `
+        --name $PostgresServerName `
+        --rule-name "AllowAllAzureServicesAndResourcesWithinAzureIps" `
         --resource-group $ResourceGroupName `
         --start-ip-address 0.0.0.0 `
         --end-ip-address 0.0.0.0 2>$null
