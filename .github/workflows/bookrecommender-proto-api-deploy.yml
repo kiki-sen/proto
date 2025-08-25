@@ -69,12 +69,16 @@ jobs:
         fi
         echo "CORS Origins: $CORS_ORIGINS"
         
+        # Set connection string in environment variable for proper handling
+        CONNECTION_STRING="${{ secrets.BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING }}"
+        echo "Connection string length: ${#CONNECTION_STRING}"
+        
         # Update the container app with the new image, CORS configuration, and PostgreSQL connection
         az containerapp update \
           --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --image $IMAGE_TAG \
-          --set-env-vars "CORS__AllowedOrigins=$CORS_ORIGINS" "ConnectionStrings__DefaultConnection=${{ secrets.BOOKRECOMMENDER_PROTO_POSTGRES_CONNECTION_STRING }}" "ASPNETCORE_ENVIRONMENT=Production"
+          --set-env-vars "CORS__AllowedOrigins=$CORS_ORIGINS" "ConnectionStrings__DefaultConnection=$CONNECTION_STRING" "ASPNETCORE_ENVIRONMENT=Production"
 
     - name: Verify deployment
       run: |
