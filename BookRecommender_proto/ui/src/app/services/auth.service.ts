@@ -2,14 +2,18 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { BehaviorSubject, Observable, catchError, map, of, throwError } from 'rxjs';
 import { AuthResponse, AuthState, LoginRequest, RegisterRequest, UserInfo } from '../models/auth.models';
+import { ConfigService } from '../config.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly API_URL = 'http://localhost:8080/api/auth';
   private readonly TOKEN_KEY = 'auth_token';
   private readonly USER_KEY = 'user_info';
+  
+  private get API_URL(): string {
+    return `${this.configService.getApiUrl()}/api/auth`;
+  }
 
   private authState = new BehaviorSubject<AuthState>({
     isLoggedIn: false,
@@ -19,7 +23,7 @@ export class AuthService {
 
   public authState$ = this.authState.asObservable();
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private configService: ConfigService) {
     this.loadStoredAuth();
   }
 

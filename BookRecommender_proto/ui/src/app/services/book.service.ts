@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
+import { ConfigService } from '../config.service';
 import { 
   Book, 
   CreateBookRequest, 
@@ -14,11 +15,14 @@ import {
   providedIn: 'root'
 })
 export class BookService {
-  private readonly API_URL = 'http://localhost:8080/api';
+  private get API_URL(): string {
+    return `${this.configService.getApiUrl()}/api`;
+  }
 
   constructor(
     private http: HttpClient,
-    private authService: AuthService
+    private authService: AuthService,
+    private configService: ConfigService
   ) {}
 
   private getAuthHeaders(): HttpHeaders {
